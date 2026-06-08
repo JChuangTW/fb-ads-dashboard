@@ -11,19 +11,9 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { fmtMoney, fmtNum, fmtPct, presetRange, iso } from "@/lib/format";
+import { fmtMoney, fmtNum, fmtPct, fmtDec, presetRange, iso } from "@/lib/format";
 import { useSelectedAccount } from "@/lib/use-account";
 
-/**
- * Messaging ads dashboard row.
- *
- * 這版 page.tsx 以「發送訊息 / Messaging」廣告為主，對應你 Apps Script 抓的欄位：
- * date_start, ad_id, ad_name, spend, reach, cpm, actions, cost_per_action_type,
- * video_thruplay_watched_actions, video_p50_watched_actions。
- *
- * 注意：這裡是前端資料型別。下一步仍需要同步修改 src/lib/fb.ts，
- * 讓 /api/insights 回傳這些 key。
- */
 type Row = {
   date_start?: string;
   campaign_id?: string;
@@ -40,30 +30,16 @@ type Row = {
   gender?: string;
   country?: string;
   region?: string;
-
-  // Base metrics
-  spend?: number;
-  reach?: number;
-  impressions?: number;
-  cpm?: number;
-  messagingConversationsStarted?: number;
-  messagingConversationsReplied?: number;
-  thruPlay?: number;
-  videoP50?: number;
-
-  // Derived metrics
-  costPerMessagingConversationStarted?: number;
-  costPerMessagingConversationReplied?: number;
-  startedRate?: number;
-  replyRate?: number;
-  costPerThruPlay?: number;
-  videoP50Rate?: number;
-
-  // Optional aliases, useful while fb.ts is being migrated
-  started7d?: number;
-  replied7d?: number;
-  costStarted7d?: number;
-  costReplied7d?: number;
+  user_segment_key?: string;
+  spend: number;
+  reach: number;
+  cpm: number;
+  started7d: number;
+  costStarted7d: number;
+  replied7d: number;
+  costReplied7d: number;
+  thruplayCount: number;
+  videoP50: number;
 };
 
 const PRESETS: { key: string; label: string }[] = [
@@ -81,47 +57,30 @@ type MetricDef = {
 };
 
 const METRICS: MetricDef[] = [
-  { key: "spend", label: "花費", fmt: fmtMoney, dir: "down" },
-  { key: "reach", label: "觸及", fmt: fmtNum, dir: "up" },
-  { key: "messagingConversationsStarted", label: "訊息對話開始", fmt: fmtNum, dir: "up" },
-  { key: "costPerMessagingConversationStarted", label: "每次訊息開始成本", fmt: fmtMoney, dir: "down" },
-  { key: "messagingConversationsReplied", label: "訊息回覆", fmt: fmtNum, dir: "up" },
-  { key: "costPerMessagingConversationReplied", label: "每次訊息回覆成本", fmt: fmtMoney, dir: "down" },
-  { key: "replyRate", label: "回覆率", fmt: fmtPct, dir: "up" },
-  { key: "startedRate", label: "訊息開始率", fmt: fmtPct, dir: "up" },
+  { key: "spend", label: "花費", fmt: fmtMoney, dir: "up" },
+  { key: "reach", label: "觸及人數", fmt: fmtNum, dir: "up" },
   { key: "cpm", label: "CPM", fmt: fmtMoney, dir: "down" },
-  { key: "thruPlay", label: "ThruPlay", fmt: fmtNum, dir: "up" },
-  { key: "costPerThruPlay", label: "每次 ThruPlay 成本", fmt: fmtMoney, dir: "down" },
-  { key: "videoP50", label: "影片播放 50%", fmt: fmtNum, dir: "up" },
-  { key: "videoP50Rate", label: "影片 50% / ThruPlay", fmt: fmtPct, dir: "up" },
-];
-
-const KPI_KEYS = [
-  "spend",
-  "reach",
-  "messagingConversationsStarted",
-  "costPerMessagingConversationStarted",
-  "messagingConversationsReplied",
-  "costPerMessagingConversationReplied",
-  "replyRate",
-  "thruPlay",
-  "videoP50",
+  { key: "started7d", label: "發起對話", fmt: fmtNum, dir: "up" },
+  { key: "costStarted7d", label: "發起對話成本", fmt: fmtMoney, dir: "down" },
+  { key: "replied7d", label: "回覆對話", fmt: fmtNum, dir: "up" },
+  { key: "costReplied7d", label: "回覆對話成本", fmt: fmtMoney, dir: "down" },
+  { key: "thruplayCount", label: "ThruPlay 次數", fmt: fmtNum, dir: "up" },
+  { key: "videoP50", label: "影片觀看50%", fmt: fmtNum, dir: "up" },
 ];
 
 const DEFAULT_COLS = [
   "spend",
   "reach",
-  "messagingConversationsStarted",
-  "costPerMessagingConversationStarted",
-  "messagingConversationsReplied",
-  "costPerMessagingConversationReplied",
-  "replyRate",
   "cpm",
-  "thruPlay",
+  "started7d",
+  "costStarted7d",
+  "replied7d",
+  "costReplied7d",
+  "thruplayCount",
   "videoP50",
 ];
 
-// -------- Dimensions --------
+// -------- Dimensions (已移除受眾分類、國家、裝置) --------
 type DimensionDef = {
   key: string;
   label: string;
@@ -133,32 +92,32 @@ type DimensionDef = {
 
 const DIMENSIONS: DimensionDef[] = [
   {
-    key: "ad",
-    label: "廣告",
-    level: "ad",
-    getKey: (r) => r.ad_id || "",
-    getName: (r) => r.ad_name || r.ad_id || "-",
+    key: "campaign",
+    label: "廣告活動",
+    level: "campaign",
+    getKey: (r) => r.campaign_id || "",
+    getName: (r) => r.campaign_name || "-",
   },
   {
     key: "adset",
     label: "廣告組合",
     level: "adset",
     getKey: (r) => r.adset_id || "",
-    getName: (r) => r.adset_name || r.adset_id || "-",
+    getName: (r) => r.adset_name || "-",
   },
   {
-    key: "campaign",
-    label: "廣告活動",
-    level: "campaign",
-    getKey: (r) => r.campaign_id || "",
-    getName: (r) => r.campaign_name || r.campaign_id || "-",
+    key: "ad",
+    label: "廣告",
+    level: "ad",
+    getKey: (r) => r.ad_id || "",
+    getName: (r) => r.ad_name || "-",
   },
   {
     key: "placement",
     label: "版位",
     level: "account",
     breakdowns: "publisher_platform,platform_position",
-    getKey: (r) => `${r.publisher_platform || "-"}|${r.platform_position || "-"}`,
+    getKey: (r) => `${r.publisher_platform}|${r.platform_position}`,
     getName: (r) => `${r.publisher_platform || "-"} / ${r.platform_position || "-"}`,
   },
   {
@@ -168,14 +127,6 @@ const DIMENSIONS: DimensionDef[] = [
     breakdowns: "publisher_platform",
     getKey: (r) => r.publisher_platform || "",
     getName: (r) => r.publisher_platform || "-",
-  },
-  {
-    key: "device",
-    label: "裝置",
-    level: "account",
-    breakdowns: "impression_device",
-    getKey: (r) => r.impression_device || "",
-    getName: (r) => r.impression_device || "-",
   },
   {
     key: "age",
@@ -192,6 +143,14 @@ const DIMENSIONS: DimensionDef[] = [
     breakdowns: "gender",
     getKey: (r) => r.gender || "",
     getName: (r) => r.gender || "-",
+  },
+  {
+    key: "region",
+    label: "地區",
+    level: "account",
+    breakdowns: "region",
+    getKey: (r) => r.region || "",
+    getName: (r) => r.region || "-",
   },
 ];
 
@@ -213,7 +172,6 @@ export default function Home() {
   const [range, setRange] = useState(presetRange("7d"));
   const [customSince, setCustomSince] = useState(range.since);
   const [customUntil, setCustomUntil] = useState(range.until);
-  const [reloadKey, setReloadKey] = useState(0);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -223,30 +181,23 @@ export default function Home() {
   const [dimTS, setDimTS] = useState<Row[]>([]);
   const [prevTotals, setPrevTotals] = useState<ReturnType<typeof aggregate> | null>(null);
 
-  const [dimensionKey, setDimensionKey] = useState<string>("ad");
+  const [dimensionKey, setDimensionKey] = useState<string>("campaign");
   const dimension = DIMENSIONS.find((d) => d.key === dimensionKey)!;
 
-  const [chartMetrics, setChartMetrics] = useState<string[]>([
-    "spend",
-    "messagingConversationsStarted",
-    "messagingConversationsReplied",
-  ]);
+  const [chartMetrics, setChartMetrics] = useState<string[]>(["spend"]);
   const [visibleCols, setVisibleCols] = useState<string[]>(DEFAULT_COLS);
-  const [dimMetric, setDimMetric] = useState<string>("messagingConversationsStarted");
+  const [dimMetric, setDimMetric] = useState<string>("spend");
   const [topN, setTopN] = useState<number>(5);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
 
-  // Chart granularity
   const [mainGran, setMainGran] = useState<Granularity>("day");
   const [dimGran, setDimGran] = useState<Granularity>("day");
 
-  // Per-dimension date range (defaults to global; user can override)
   const [dimRange, setDimRange] = useState(range);
   const [dimRangeOverride, setDimRangeOverride] = useState(false);
   const [dimSinceInput, setDimSinceInput] = useState(range.since);
   const [dimUntilInput, setDimUntilInput] = useState(range.until);
 
-  // When global range changes, sync dim range unless user has overridden
   useEffect(() => {
     if (!dimRangeOverride) {
       setDimRange(range);
@@ -267,7 +218,6 @@ export default function Home() {
     setDimUntilInput(range.until);
   };
 
-  // Reset manual selection when dimension changes
   useEffect(() => {
     setSelectedKeys([]);
   }, [dimensionKey]);
@@ -287,7 +237,6 @@ export default function Home() {
     setRange({ since: customSince, until: customUntil });
   };
 
-  // Load overview (KPI + main trend + prev period) — only on range change
   useEffect(() => {
     if (!accountHydrated) return;
     async function load() {
@@ -304,7 +253,6 @@ export default function Home() {
           fetch(q({ level: "account", time_increment: "1" }, prev)).then((r) => r.json()),
         ]);
         if (ts.error) throw new Error(ts.error);
-        if (prevTs.error) throw new Error(prevTs.error);
         setTimeSeries(ts.data || []);
         setPrevTotals(prevTs.data ? aggregate(prevTs.data) : null);
       } catch (e: any) {
@@ -312,14 +260,12 @@ export default function Home() {
       }
     }
     load();
-  }, [range.since, range.until, accountId, accountHydrated, reloadKey]);
+  }, [range.since, range.until, accountId, accountHydrated]);
 
-  // Load per-dimension data — on dimension OR dim-range change
   useEffect(() => {
     if (!accountHydrated) return;
     async function load() {
       setLoading(true);
-      setError(null);
       try {
         const q = (extra: Record<string, string>) => {
           const sp = new URLSearchParams({ since: dimRange.since, until: dimRange.until, ...extra });
@@ -344,32 +290,35 @@ export default function Home() {
       }
     }
     load();
-  }, [dimensionKey, dimRange.since, dimRange.until, accountId, accountHydrated, reloadKey]);
+  }, [dimensionKey, dimRange.since, dimRange.until, accountId, accountHydrated]);
 
   const totals = useMemo(() => aggregate(timeSeries), [timeSeries]);
-  const tableRows = useMemo(() => aggregateByDimension(dimRows, dimension), [dimRows, dimension]);
 
-  // All unique names in current dimension, sorted by current metric.
-  // 對成本 / 比率類欄位不能直接相加，所以這裡用 aggregate() 重算後再排序。
   const allNames = useMemo(() => {
-    return tableRows
-      .map((r) => [dimension.getName(r), metricValue(r, dimMetric)] as [string, number])
-      .filter(([name]) => Boolean(name))
-      .sort((a, b) => b[1] - a[1])
-      .map(([name]) => name);
-  }, [tableRows, dimension, dimMetric]);
+    const totals = new Map<string, number>();
+    for (const r of dimRows) {
+      const k = dimension.getName(r);
+      if (!k) continue;
+      totals.set(k, (totals.get(k) || 0) + (((r as any)[dimMetric] as number) || 0));
+    }
+    return [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  }, [dimRows, dimension, dimMetric]);
 
-  // Effective keys for chart: user selection when any, else default Top N
-  const effectiveKeys = selectedKeys.length > 0 ? selectedKeys : allNames.slice(0, topN);
+  const effectiveKeys =
+    selectedKeys.length > 0 ? selectedKeys : allNames.slice(0, topN);
+
+  const { pivoted, seriesKeys } = useMemo(
+    () => pivotByKeys(dimTS, dimension.getName, dimMetric, effectiveKeys),
+    [dimTS, dimension, dimMetric, effectiveKeys]
+  );
 
   const mainChartData = useMemo(
     () => rollupTimeSeries(timeSeries, mainGran),
     [timeSeries, mainGran]
   );
-
-  const { pivoted: dimChartData, seriesKeys } = useMemo(
-    () => pivotByKeys(dimTS, dimension.getName, dimMetric, effectiveKeys, dimGran),
-    [dimTS, dimension, dimMetric, effectiveKeys, dimGran]
+  const dimChartData = useMemo(
+    () => rollupPivoted(pivoted, seriesKeys, dimGran),
+    [pivoted, seriesKeys, dimGran]
   );
 
   return (
@@ -377,7 +326,7 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-6 py-8">
         <header className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Meta 訊息廣告成效儀表板</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Facebook Ads 訊息對話數據主面板</h1>
             <p className="text-sm text-slate-400 mt-1 font-mono">
               {range.since} → {range.until}
             </p>
@@ -389,7 +338,7 @@ export default function Home() {
                 onClick={() => setPreset(p.key)}
                 className={`px-3 py-1.5 rounded-lg text-sm border transition ${
                   preset === p.key
-                    ? "bg-sky-500/20 text-sky-300 border-sky-500/50"
+                    ? "bg-sky-500/20 text-sky-300"
                     : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600"
                 }`}
               >
@@ -424,7 +373,7 @@ export default function Home() {
               </button>
             </div>
             <button
-              onClick={() => setReloadKey((n) => n + 1)}
+              onClick={() => setRange({ ...range })}
               className="px-3 py-1.5 rounded-lg text-sm border bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600"
               title="重新整理"
             >
@@ -439,20 +388,20 @@ export default function Home() {
           </div>
         )}
 
-        {/* KPI Cards */}
-        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-          {METRICS.filter((m) => KPI_KEYS.includes(m.key)).map((m) => {
-            const cur = metricValue(totals, m.key);
-            const prev = prevTotals ? metricValue(prevTotals, m.key) : null;
+        {/* 核心 KPI 區塊 */}
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+          {METRICS.filter((m) => ["spend", "reach", "started7d", "costStarted7d", "replied7d"].includes(m.key)).map((m) => {
+            const cur = (totals as any)[m.key] as number;
+            const prev = prevTotals ? ((prevTotals as any)[m.key] as number) : null;
             const delta = prev && prev !== 0 ? ((cur - prev) / prev) * 100 : null;
             return <Kpi key={m.key} metric={m} value={cur} delta={delta} />;
           })}
         </section>
 
-        {/* Main trend chart */}
+        {/* 趨勢圖表 */}
         <section className="bg-slate-900/60 backdrop-blur rounded-xl border border-slate-800 p-5 mb-6">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-            <h2 className="font-semibold text-slate-200">訊息成效時間趨勢</h2>
+            <h2 className="font-semibold text-slate-200">時間趨勢</h2>
             <div className="flex gap-2 flex-wrap">
               <GranularityToggle value={mainGran} onChange={setMainGran} />
               <MultiPicker
@@ -480,9 +429,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Dimension section */}
+        {/* 維度分析 */}
         <section className="bg-slate-900/60 backdrop-blur rounded-xl border border-slate-800 p-5 mb-6">
-          {/* Dimension date range */}
           <div className="mb-4 flex items-center gap-2 flex-wrap">
             <div className="text-[11px] uppercase tracking-wider text-slate-500">維度日期</div>
             <div
@@ -527,7 +475,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* Dimension chip selector */}
           <div className="mb-5">
             <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2">分析維度</div>
             <div className="flex gap-2 flex-wrap">
@@ -561,7 +508,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Top N trend chart */}
           <div className="mb-5">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <div className="text-sm text-slate-400">
@@ -634,10 +580,9 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Column picker */}
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm text-slate-400">
-              {loading ? "載入中…" : `${tableRows.length} 筆 ${dimension.label}`}
+              {loading ? "載入中…" : `${dimRows.length} 筆 ${dimension.label}`}
               <span className="ml-2 text-xs text-slate-500 font-mono">
                 {dimRange.since} → {dimRange.until}
               </span>
@@ -650,11 +595,11 @@ export default function Home() {
             />
           </div>
 
-          <Table rows={tableRows} dimension={dimension} visibleCols={visibleCols} />
+          <Table rows={dimRows} dimension={dimension} visibleCols={visibleCols} />
         </section>
 
         <footer className="text-xs text-slate-600 text-center py-4 font-mono">
-          {accountId || "使用環境變數預設廣告帳號"}
+          act_360692769936978
         </footer>
       </div>
     </div>
@@ -720,7 +665,6 @@ function AreaTrendChart({
   );
 }
 
-// Stable per-render id to avoid gradient id collisions between charts
 function useId() {
   const r = useRef<string | null>(null);
   if (r.current === null) r.current = "g" + Math.random().toString(36).slice(2, 9);
@@ -847,7 +791,7 @@ function Table({
   dimension: DimensionDef;
   visibleCols: string[];
 }) {
-  const [sortKey, setSortKey] = useState<string>("messagingConversationsStarted");
+  const [sortKey, setSortKey] = useState<string>("spend");
   const [desc, setDesc] = useState(true);
 
   const cols = METRICS.filter((m) => visibleCols.includes(m.key));
@@ -855,7 +799,7 @@ function Table({
   const stats = useMemo(() => {
     const s: Record<string, { min: number; max: number }> = {};
     for (const m of cols) {
-      const vals = rows.map((r) => metricValue(r, m.key)).filter((v) => v > 0);
+      const vals = rows.map((r) => (r as any)[m.key] as number).filter((v) => v > 0);
       if (!vals.length) {
         s[m.key] = { min: 0, max: 0 };
         continue;
@@ -868,16 +812,14 @@ function Table({
 
   const sorted = useMemo(() => {
     const copy = [...rows];
-    copy.sort((a, b) => {
-      const av = sortKey === "_name" ? dimension.getName(a) : metricValue(a, sortKey);
-      const bv = sortKey === "_name" ? dimension.getName(b) : metricValue(b, sortKey);
-      if (typeof av === "string" && typeof bv === "string") {
-        return desc ? bv.localeCompare(av) : av.localeCompare(bv);
-      }
-      return desc ? Number(bv) - Number(av) : Number(av) - Number(bv);
+    copy.sort((a: any, b: any) => {
+      const av = a[sortKey] ?? 0;
+      const bv = b[sortKey] ?? 0;
+      if (typeof av === "string") return desc ? bv.localeCompare(av) : av.localeCompare(bv);
+      return desc ? bv - av : av - bv;
     });
     return copy;
-  }, [rows, sortKey, desc, dimension]);
+  }, [rows, sortKey, desc]);
 
   const renderHeader = (key: string, label: string, align: "left" | "right" = "right") => (
     <th
@@ -912,12 +854,12 @@ function Table({
         </thead>
         <tbody>
           {sorted.map((r, i) => (
-            <tr key={`${dimension.getName(r)}-${i}`} className="border-b border-slate-900 hover:bg-slate-800/40">
+            <tr key={i} className="border-b border-slate-900 hover:bg-slate-800/40">
               <td className="px-3 py-2.5 max-w-[280px] truncate text-slate-200" title={dimension.getName(r)}>
                 {dimension.getName(r)}
               </td>
               {cols.map((c) => {
-                const v = metricValue(r, c.key);
+                const v = ((r as any)[c.key] as number) || 0;
                 const color = colorFor(v, stats[c.key], c.dir);
                 return (
                   <td key={c.key} className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap ${color}`}>
@@ -953,194 +895,50 @@ function previousRange(r: { since: string; until: string }) {
   return { since: iso(prevSince), until: iso(prevUntil) };
 }
 
-function num(v: unknown): number {
-  if (v === null || v === undefined || v === "") return 0;
-  const n = typeof v === "string" ? Number(v.replace(/,/g, "")) : Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function actionValue(arr: any, actionType: string): number {
-  if (!Array.isArray(arr)) return 0;
-  const found = arr.find((item) => item?.action_type === actionType);
-  return found ? num(found.value) : 0;
-}
-
-function firstArrayValue(arr: any): number {
-  return Array.isArray(arr) && arr.length ? num(arr[0]?.value) : 0;
-}
-
-function rawMetricValue(r: Row, key: string): number {
-  const row = r as any;
-  switch (key) {
-    case "messagingConversationsStarted":
-      return (
-        num(row.messagingConversationsStarted ?? row.started7d) ||
-        actionValue(row.actions, "onsite_conversion.messaging_conversation_started_7d")
-      );
-    case "messagingConversationsReplied":
-      return (
-        num(row.messagingConversationsReplied ?? row.replied7d) ||
-        actionValue(row.actions, "onsite_conversion.messaging_conversation_replied_7d")
-      );
-    case "costPerMessagingConversationStarted":
-      return num(row.costPerMessagingConversationStarted ?? row.costStarted7d);
-    case "costPerMessagingConversationReplied":
-      return num(row.costPerMessagingConversationReplied ?? row.costReplied7d);
-    case "thruPlay":
-      return (
-        num(row.thruPlay ?? row.thruplay ?? row.thruplays ?? row.videoThruplay) ||
-        actionValue(row.video_thruplay_watched_actions, "video_view")
-      );
-    case "videoP50":
-      return (
-        num(row.videoP50 ?? row.videoPlay50 ?? row.videoP50Actions) ||
-        firstArrayValue(row.video_p50_watched_actions)
-      );
-    default:
-      return num(row[key]);
-  }
-}
-
-function metricValue(r: Row, key: string): number {
-  return rawMetricValue(r, key);
-}
-
 function aggregate(rows: Row[]) {
-  const t = rows.reduce<{
-    spend: number;
-    reach: number;
-    impressions: number;
-    messagingConversationsStarted: number;
-    messagingConversationsReplied: number;
-    thruPlay: number;
-    videoP50: number;
-    weightedCpm: number;
-    cpmWeight: number;
-  }>(
+  const t = rows.reduce(
     (a, r) => {
-      const spend = rawMetricValue(r, "spend");
-      const reach = rawMetricValue(r, "reach");
-      const impressions = rawMetricValue(r, "impressions");
-      const started = rawMetricValue(r, "messagingConversationsStarted");
-      const replied = rawMetricValue(r, "messagingConversationsReplied");
-      const thruPlay = rawMetricValue(r, "thruPlay");
-      const videoP50 = rawMetricValue(r, "videoP50");
-      const cpm = rawMetricValue(r, "cpm");
-      const cpmWeight = impressions || reach || spend || 0;
-
-      a.spend += spend;
-      a.reach += reach;
-      a.impressions += impressions;
-      a.messagingConversationsStarted += started;
-      a.messagingConversationsReplied += replied;
-      a.thruPlay += thruPlay;
-      a.videoP50 += videoP50;
-      a.weightedCpm += cpm * cpmWeight;
-      a.cpmWeight += cpmWeight;
+      a.spend += r.spend || 0;
+      a.reach += r.reach || 0;
+      a.started7d += r.started7d || 0;
+      a.replied7d += r.replied7d || 0;
+      a.thruplayCount += r.thruplayCount || 0;
+      a.videoP50 += r.videoP50 || 0;
       return a;
     },
-    {
-      spend: 0,
-      reach: 0,
-      impressions: 0,
-      messagingConversationsStarted: 0,
-      messagingConversationsReplied: 0,
-      thruPlay: 0,
-      videoP50: 0,
-      weightedCpm: 0,
-      cpmWeight: 0,
-    }
+    { spend: 0, reach: 0, started7d: 0, replied7d: 0, thruplayCount: 0, videoP50: 0 }
   );
+  
+  const costStarted7d = t.started7d ? t.spend / t.started7d : 0;
+  const costReplied7d = t.replied7d ? t.spend / t.replied7d : 0;
+  const cpm = rows.length ? rows.reduce((sum, r) => sum + (r.cpm || 0), 0) / rows.length : 0;
 
-  const cpm = t.impressions
-    ? (t.spend / t.impressions) * 1000
-    : t.cpmWeight
-      ? t.weightedCpm / t.cpmWeight
-      : 0;
-  const costPerMessagingConversationStarted = t.messagingConversationsStarted
-    ? t.spend / t.messagingConversationsStarted
-    : 0;
-  const costPerMessagingConversationReplied = t.messagingConversationsReplied
-    ? t.spend / t.messagingConversationsReplied
-    : 0;
-  const startedRate = t.reach ? (t.messagingConversationsStarted / t.reach) * 100 : 0;
-  const replyRate = t.messagingConversationsStarted
-    ? (t.messagingConversationsReplied / t.messagingConversationsStarted) * 100
-    : 0;
-  const costPerThruPlay = t.thruPlay ? t.spend / t.thruPlay : 0;
-  const videoP50Rate = t.thruPlay ? (t.videoP50 / t.thruPlay) * 100 : 0;
-
-  return {
-    spend: t.spend,
-    reach: t.reach,
-    impressions: t.impressions,
-    cpm,
-    messagingConversationsStarted: t.messagingConversationsStarted,
-    costPerMessagingConversationStarted,
-    messagingConversationsReplied: t.messagingConversationsReplied,
-    costPerMessagingConversationReplied,
-    startedRate,
-    replyRate,
-    thruPlay: t.thruPlay,
-    costPerThruPlay,
-    videoP50: t.videoP50,
-    videoP50Rate,
-  };
-}
-
-function aggregateByDimension(rows: Row[], dimension: DimensionDef): Row[] {
-  const byName = new Map<string, Row[]>();
-  const firstRow = new Map<string, Row>();
-
-  for (const r of rows) {
-    const name = dimension.getName(r);
-    if (!name) continue;
-    if (!byName.has(name)) {
-      byName.set(name, []);
-      firstRow.set(name, r);
-    }
-    byName.get(name)!.push(r);
-  }
-
-  return [...byName.entries()].map(([name, group]) => {
-    const first = firstRow.get(name) || group[0];
-    return { ...first, ...aggregate(group) } as Row;
-  });
+  return { ...t, cpm, costStarted7d, costReplied7d };
 }
 
 function pivotByKeys(
   rows: Row[],
   nameFn: (r: Row) => string,
   metric: string,
-  keys: string[],
-  granularity: Granularity
+  keys: string[]
 ) {
   if (!rows.length || !keys.length) return { pivoted: [] as any[], seriesKeys: keys };
   const keySet = new Set(keys);
-  const byDate = new Map<string, Map<string, Row[]>>();
-
+  const byDate = new Map<string, any>();
   for (const r of rows) {
-    const itemName = nameFn(r);
-    if (!keySet.has(itemName)) continue;
-    const date = bucketDate(r.date_start || "", granularity);
-    if (!date) continue;
-    if (!byDate.has(date)) byDate.set(date, new Map());
-    const byItem = byDate.get(date)!;
-    if (!byItem.has(itemName)) byItem.set(itemName, []);
-    byItem.get(itemName)!.push(r);
+    const k = nameFn(r);
+    if (!keySet.has(k)) continue;
+    const d = r.date_start || "";
+    if (!byDate.has(d)) byDate.set(d, { date: d });
+    const row = byDate.get(d);
+    row[k] = (row[k] || 0) + (((r as any)[metric] as number) || 0);
   }
-
-  const pivoted = [...byDate.entries()]
-    .map(([date, byItem]) => {
-      const row: Record<string, number | string> = { date };
-      for (const key of keys) {
-        const group = byItem.get(key) || [];
-        row[key] = group.length ? metricValue(aggregate(group), metric) : 0;
-      }
+  const pivoted = [...byDate.values()]
+    .map((row) => {
+      for (const k of keys) if (row[k] == null) row[k] = 0;
       return row;
     })
-    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-
+    .sort((a, b) => a.date.localeCompare(b.date));
   return { pivoted, seriesKeys: keys };
 }
 
@@ -1154,34 +952,77 @@ function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
-// ---------- Granularity: day / week / month ----------
 type Granularity = "day" | "week" | "month";
 
 function bucketDate(dateStr: string, g: Granularity): string {
   if (!dateStr) return "";
   if (g === "day") return dateStr;
-  if (g === "month") return dateStr.slice(0, 7); // YYYY-MM
-  // week: ISO-ish, bucket by Monday start
+  if (g === "month") return dateStr.slice(0, 7);
   const d = new Date(dateStr + "T00:00:00");
-  const day = d.getDay(); // 0=Sun .. 6=Sat
+  const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
   return iso(d);
 }
 
-// Aggregate Row[] (for main trend) by granularity — recompute derived metrics
 function rollupTimeSeries(rows: Row[], g: Granularity): any[] {
-  if (g === "day") return rows.map((r) => ({ ...r, ...aggregate([r]) }));
-  const byBucket = new Map<string, Row[]>();
+  if (g === "day") return rows;
+  const byBucket = new Map<string, any>();
   for (const r of rows) {
     const k = bucketDate(r.date_start || "", g);
     if (!k) continue;
-    if (!byBucket.has(k)) byBucket.set(k, []);
-    byBucket.get(k)!.push(r);
+    let e = byBucket.get(k);
+    if (!e) {
+      e = {
+        date_start: k,
+        spend: 0,
+        reach: 0,
+        started7d: 0,
+        replied7d: 0,
+        thruplayCount: 0,
+        videoP50: 0,
+        _cpmSum: 0,
+        _cpmCount: 0,
+      };
+      byBucket.set(k, e);
+    }
+    e.spend += r.spend || 0;
+    e.reach += r.reach || 0;
+    e.started7d += r.started7d || 0;
+    e.replied7d += r.replied7d || 0;
+    e.thruplayCount += r.thruplayCount || 0;
+    e.videoP50 += r.videoP50 || 0;
+    if (r.cpm) {
+      e._cpmSum += r.cpm;
+      e._cpmCount++;
+    }
   }
-  return [...byBucket.entries()]
-    .map(([date_start, group]) => ({ date_start, ...aggregate(group) }))
-    .sort((a, b) => a.date_start.localeCompare(b.date_start));
+  const out = [...byBucket.values()].sort((a, b) => a.date_start.localeCompare(b.date_start));
+  for (const e of out) {
+    e.costStarted7d = e.started7d ? e.spend / e.started7d : 0;
+    e.costReplied7d = e.replied7d ? e.spend / e.replied7d : 0;
+    e.cpm = e._cpmCount ? e._cpmSum / e._cpmCount : 0;
+    delete e._cpmSum;
+    delete e._cpmCount;
+  }
+  return out;
+}
+
+function rollupPivoted(data: any[], keys: string[], g: Granularity): any[] {
+  if (g === "day" || !data.length) return data;
+  const byBucket = new Map<string, any>();
+  for (const row of data) {
+    const k = bucketDate(row.date, g);
+    if (!k) continue;
+    let e = byBucket.get(k);
+    if (!e) {
+      e = { date: k };
+      for (const s of keys) e[s] = 0;
+      byBucket.set(k, e);
+    }
+    for (const s of keys) e[s] += row[s] || 0;
+  }
+  return [...byBucket.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function GranularityToggle({
