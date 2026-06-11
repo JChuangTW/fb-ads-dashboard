@@ -13,6 +13,21 @@ import {
 } from "recharts";
 import { fmtMoney, fmtNum, presetRange, iso } from "@/lib/format";
 
+function getRangeByPreset(preset: string) {
+  if (preset === "month") return monthToDateRange();
+  return presetRange(preset);
+}
+
+function monthToDateRange() {
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  return {
+    since: iso(firstDay),
+    until: iso(today),
+  };
+}
+
 type Row = {
   date_start?: string;
 
@@ -47,9 +62,9 @@ type Row = {
 };
 
 const PRESETS: { key: string; label: string }[] = [
+  { key: "month", label: "本月" },
   { key: "yesterday", label: "昨日" },
   { key: "7d", label: "近 7 天" },
-  { key: "14d", label: "近 14 天" },
   { key: "30d", label: "近 30 天" },
 ];
 
@@ -170,8 +185,8 @@ const SERIES_COLORS = [
 ];
 
 export default function Home() {
-  const [preset, setPreset] = useState("7d");
-  const [range, setRange] = useState(presetRange("7d"));
+  const [preset, setPreset] = useState("month");
+  const [range, setRange] = useState(presetRange("month"));
   const [customSince, setCustomSince] = useState(range.since);
   const [customUntil, setCustomUntil] = useState(range.until);
 
@@ -229,7 +244,7 @@ export default function Home() {
 
   useEffect(() => {
     if (preset !== "custom") {
-      const r = presetRange(preset);
+      const r = getRangeByPreset(preset);
       setRange(r);
       setCustomSince(r.since);
       setCustomUntil(r.until);
@@ -365,7 +380,7 @@ export default function Home() {
         <header className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
-              Facebook Ads 訊息對話數據主面板
+              杰美學診所 Meta ads dashboard
             </h1>
             <p className="text-sm text-slate-400 mt-1 font-mono">
               {range.since} → {range.until}
