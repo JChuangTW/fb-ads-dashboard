@@ -1,138 +1,95 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { fmtMoney, fmtNum, fmtPct, presetRange, iso } from "@/lib/format";
-
-// ============================================================
-// Types & Constants
-// ============================================================
+import { useEffect, useMemo, useState } from "react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { fmtMoney, fmtNum, fmtPct, iso, presetRange } from "@/lib/format";
 
 type Row = {
   date_start?: string;
-
-  campaign_id?: string;
-  campaign_name?: string;
-  adset_id?: string;
-  adset_name?: string;
   ad_id?: string;
   ad_name?: string;
 
-  publisher_platform?: string;
-  platform_position?: string;
-  impression_device?: string;
-  device_platform?: string;
-  age?: string;
-  gender?: string;
-  country?: string;
-  region?: string;
+  spend?: number;
+  reach?: number;
+  cpm?: number;
 
-  spend: number;
-  reach: number;
-  impressions: number;
-  cpm: number;
+  started7d?: number;
+  costStarted7d?: number;
 
-  messagingConversationsStarted: number;
-
-  costPerMessagingConversationStarted: number;
-  startedRate: number;
+  messagingConversationsStarted?: number;
+  costPerMessagingConversationStarted?: number;
 };
 
-type MetricDef = {
-  key: keyof AggCells;
+type ProjectStats = {
+  project: string;
+  spend: number;
+  reach: number;
+  messages: number;
+  messageCost: number;
+  messageStartRate: number;
+};
+
+type ProjectKpi = {
+  project: string;
+  current: ProjectStats;
+  compare: ProjectStats;
+  deltas: {
+    messages: number | null;
+    messageCost: number | null;
+    messageStartRate: number | null;
+  };
+};
+
+type TrendMetricKey = "messages" | "messageCost" | "messageStartRate";
+
+const PROJECTS = [
+  "皮秒",
+  "miraDry",
+  "逆時針",
+  "微針筆",
+  "熊貓針",
+  "鳳凰電波",
+  "隆鼻",
+  "雙眼皮",
+  "提眉",
+  "抽脂",
+  "異體真皮",
+  "母親節",
+];
+
+const TREND_METRICS: {
+  key: TrendMetricKey;
   label: string;
   fmt: (n: number) => string;
   dir: "up" | "down";
-};
-
-const METRICS: MetricDef[] = [
-  { key: "spend", label: "花費", fmt: fmtMoney, dir: "down" },
-  { key: "reach", label: "觸及", fmt: fmtNum, dir: "up" },
-  { key: "impressions", label: "曝光", fmt: fmtNum, dir: "up" },
-  { key: "cpm", label: "CPM", fmt: fmtMoney, dir: "down" },
-  {
-    key: "messagingConversationsStarted",
-    label: "訊息對話開始",
-    fmt: fmtNum,
-    dir: "up",
-  },
-  {
-    key: "costPerMessagingConversationStarted",
-    label: "每次訊息開始成本",
-    fmt: fmtMoney,
-    dir: "down",
-  },
-  { key: "startedRate", label: "訊息開始率", fmt: fmtPct, dir: "up" },
+}[] = [
+  { key: "messages", label: "訊息量", fmt: fmtNum, dir: "up" },
+  { key: "messageCost", label: "訊息成本", fmt: fmtMoney, dir: "down" },
+  { key: "messageStartRate", label: "訊息開始率", fmt: fmtPct, dir: "up" },
 ];
 
-type DimensionDef = {
-  key: string;
-  label: string;
-  level: "account" | "campaign" | "adset" | "ad";
-  breakdowns?: string;
-  getName: (r: Row) => string;
-};
-
-const DIMENSIONS: DimensionDef[] = [
-  {
-    key: "ad",
-    label: "廣告",
-    level: "ad",
-    getName: (r) => r.ad_name || r.ad_id || "-",
-  },
-  {
-    key: "adset",
-    label: "廣告組合",
-    level: "adset",
-    getName: (r) => r.adset_name || r.adset_id || "-",
-  },
-  {
-    key: "campaign",
-    label: "廣告活動",
-    level: "campaign",
-    getName: (r) => r.campaign_name || r.campaign_id || "-",
-  },
-  {
-    key: "placement",
-    label: "版位",
-    level: "account",
-    breakdowns: "publisher_platform,platform_position",
-    getName: (r) => `${r.publisher_platform || "-"} / ${r.platform_position || "-"}`,
-  },
-  {
-    key: "publisher_platform",
-    label: "平台",
-    level: "account",
-    breakdowns: "publisher_platform",
-    getName: (r) => r.publisher_platform || "-",
-  },
-  {
-    key: "device",
-    label: "裝置",
-    level: "account",
-    breakdowns: "impression_device",
-    getName: (r) => r.impression_device || "-",
-  },
-  {
-    key: "age",
-    label: "年齡",
-    level: "account",
-    breakdowns: "age",
-    getName: (r) => r.age || "-",
-  },
-  {
-    key: "gender",
-    label: "性別",
-    level: "account",
-    breakdowns: "gender",
-    getName: (r) => r.gender || "-",
-  },
-  {
-    key: "region",
-    label: "地區",
-    level: "account",
-    breakdowns: "region",
-    getName: (r) => r.region || "-",
-  },
+const SERIES_COLORS = [
+  "#38bdf8",
+  "#f472b6",
+  "#fb923c",
+  "#34d399",
+  "#a78bfa",
+  "#fbbf24",
+  "#f87171",
+  "#22d3ee",
+  "#c084fc",
+  "#2dd4bf",
+  "#fb7185",
+  "#a3e635",
 ];
 
 const PRESETS = [
@@ -142,203 +99,99 @@ const PRESETS = [
   { key: "30d", label: "近 30 天" },
 ];
 
-type Granularity = "day" | "week" | "month";
-
-const MAX_COLS = 8;
-const TREND_THRESHOLD = 5;
-
-// 換新的 localStorage key，避免讀到舊版電商模板的設定
-const CONFIG_KEY = "fb-custom-messaging-pivot-v1";
-
-type Config = {
-  datePreset: string;
-  dateSince: string;
-  dateUntil: string;
-  granularity: Granularity;
-  dimensionKey: string;
-  metricKey: keyof AggCells;
-  tableCols: string[];
-  kpiCards: string[];
-};
-
-function defaultConfig(): Config {
-  const r = presetRange("7d");
-
-  return {
-    datePreset: "7d",
-    dateSince: r.since,
-    dateUntil: r.until,
-    granularity: "day",
-    dimensionKey: "ad",
-    metricKey: "messagingConversationsStarted",
-    tableCols: [],
-    kpiCards: [],
-  };
-}
-
-function loadConfig(): Config {
-  if (typeof window === "undefined") return defaultConfig();
-
-  try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return defaultConfig();
-
-    const parsed = JSON.parse(raw);
-    const fallback = defaultConfig();
-
-    const metricExists = METRICS.some((m) => m.key === parsed.metricKey);
-    const dimensionExists = DIMENSIONS.some((d) => d.key === parsed.dimensionKey);
-
-    return {
-      ...fallback,
-      ...parsed,
-      metricKey: metricExists ? parsed.metricKey : fallback.metricKey,
-      dimensionKey: dimensionExists ? parsed.dimensionKey : fallback.dimensionKey,
-      tableCols: Array.isArray(parsed.tableCols) ? parsed.tableCols : [],
-      kpiCards: Array.isArray(parsed.kpiCards) ? parsed.kpiCards : [],
-    };
-  } catch {
-    return defaultConfig();
-  }
-}
-
-function saveConfig(c: Config) {
-  if (typeof window === "undefined") return;
-
-  try {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(c));
-  } catch {}
-}
-
-// ============================================================
-// Page
-// ============================================================
-
 export default function CustomPage() {
-  const [config, setConfig] = useState<Config>(defaultConfig);
-  const [hydrated, setHydrated] = useState(false);
+  const defaultCurrent = presetRange("30d");
+  const defaultCompare = previousRange(defaultCurrent);
 
-  useEffect(() => {
-    setConfig(loadConfig());
-    setHydrated(true);
-  }, []);
+  const [currentPreset, setCurrentPreset] = useState("30d");
+  const [currentRange, setCurrentRange] = useState(defaultCurrent);
+  const [currentSinceInput, setCurrentSinceInput] = useState(defaultCurrent.since);
+  const [currentUntilInput, setCurrentUntilInput] = useState(defaultCurrent.until);
 
-  useEffect(() => {
-    if (hydrated) saveConfig(config);
-  }, [config, hydrated]);
+  const [compareRange, setCompareRange] = useState(defaultCompare);
+  const [compareSinceInput, setCompareSinceInput] = useState(defaultCompare.since);
+  const [compareUntilInput, setCompareUntilInput] = useState(defaultCompare.until);
 
-  const update = <K extends keyof Config>(k: K, v: Config[K]) => {
-    setConfig((c) => ({ ...c, [k]: v }));
-  };
+  const [trendMetric, setTrendMetric] = useState<TrendMetricKey>("messages");
+  const [topN, setTopN] = useState(6);
 
-  const [customSince, setCustomSince] = useState(config.dateSince);
-  const [customUntil, setCustomUntil] = useState(config.dateUntil);
-
-  useEffect(() => {
-    setCustomSince(config.dateSince);
-    setCustomUntil(config.dateUntil);
-  }, [config.dateSince, config.dateUntil]);
-
-  const setPreset = (p: string) => {
-    if (p === "custom") {
-      update("datePreset", "custom");
-      return;
-    }
-
-    const r = presetRange(p);
-
-    setConfig((c) => ({
-      ...c,
-      datePreset: p,
-      dateSince: r.since,
-      dateUntil: r.until,
-    }));
-  };
-
-  const applyCustom = () => {
-    if (!customSince || !customUntil) return;
-
-    setConfig((c) => ({
-      ...c,
-      datePreset: "custom",
-      dateSince: customSince,
-      dateUntil: customUntil,
-    }));
-  };
-
-  const resetConfig = () => {
-    if (!confirm("重設所有自訂設定？這會清掉維度、指標、KPI 卡片和表格欄位。")) {
-      return;
-    }
-
-    setConfig(defaultConfig());
-  };
-
+  const [currentRows, setCurrentRows] = useState<Row[]>([]);
+  const [compareRows, setCompareRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [curRows, setCurRows] = useState<Row[]>([]);
-  const [prevRows, setPrevRows] = useState<Row[]>([]);
 
-  const dimension =
-    DIMENSIONS.find((d) => d.key === config.dimensionKey) || DIMENSIONS[0];
+  const selectedTrendMetric =
+    TREND_METRICS.find((m) => m.key === trendMetric) || TREND_METRICS[0];
 
-  const metric =
-    METRICS.find((m) => m.key === config.metricKey) || METRICS[0];
+  const applyCurrentPreset = (preset: string) => {
+    setCurrentPreset(preset);
+
+    if (preset === "custom") return;
+
+    const r = presetRange(preset);
+    const prev = previousRange(r);
+
+    setCurrentRange(r);
+    setCurrentSinceInput(r.since);
+    setCurrentUntilInput(r.until);
+
+    setCompareRange(prev);
+    setCompareSinceInput(prev.since);
+    setCompareUntilInput(prev.until);
+  };
+
+  const applyCurrentCustom = () => {
+    if (!currentSinceInput || !currentUntilInput) return;
+
+    const r = {
+      since: currentSinceInput,
+      until: currentUntilInput,
+    };
+
+    setCurrentPreset("custom");
+    setCurrentRange(r);
+  };
+
+  const applyCompareCustom = () => {
+    if (!compareSinceInput || !compareUntilInput) return;
+
+    setCompareRange({
+      since: compareSinceInput,
+      until: compareUntilInput,
+    });
+  };
+
+  const resetCompareToPreviousPeriod = () => {
+    const prev = previousRange(currentRange);
+
+    setCompareRange(prev);
+    setCompareSinceInput(prev.since);
+    setCompareUntilInput(prev.until);
+  };
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      setError(null);
       setLoading(true);
+      setError(null);
 
       try {
-        const cur = {
-          since: config.dateSince,
-          until: config.dateUntil,
-        };
-
-        const prev = previousRange(cur);
-
-        const buildUrl = (
-          extra: Record<string, string>,
-          range = cur
-        ) => {
-          const sp = new URLSearchParams({
-            since: range.since,
-            until: range.until,
-            ...extra,
-          });
-
-          // 重要：
-          // 這裡刻意不再加 account_id。
-          // 讓後端 src/app/api/insights/route.ts 固定使用 FB_AD_ACCOUNT_ID。
-          return `/api/insights?${sp.toString()}`;
-        };
-
-        const base: Record<string, string> = {
-          level: dimension.level,
-        };
-
-        if (dimension.breakdowns) {
-          base.breakdowns = dimension.breakdowns;
-        }
-
-        const [curJ, prevJ] = await Promise.all([
-          fetch(buildUrl({ ...base, time_increment: "1" })).then((r) => r.json()),
-          fetch(buildUrl(base, prev)).then((r) => r.json()),
+        const [currentJson, compareJson] = await Promise.all([
+          fetchInsights(currentRange),
+          fetchInsights(compareRange),
         ]);
 
         if (cancelled) return;
 
-        if (curJ.error) throw new Error(curJ.error);
-        if (prevJ.error) throw new Error(prevJ.error);
+        if (currentJson.error) throw new Error(currentJson.error);
+        if (compareJson.error) throw new Error(compareJson.error);
 
-        setCurRows(curJ.data || []);
-        setPrevRows(prevJ.data || []);
+        setCurrentRows(currentJson.data || []);
+        setCompareRows(compareJson.data || []);
       } catch (e: any) {
         if (!cancelled) {
-          setError(e.message || "Unknown error");
+          setError(e?.message || "Unknown error");
         }
       } finally {
         if (!cancelled) {
@@ -352,169 +205,83 @@ export default function CustomPage() {
     return () => {
       cancelled = true;
     };
-  }, [config.dimensionKey, config.dateSince, config.dateUntil]);
+  }, [currentRange.since, currentRange.until, compareRange.since, compareRange.until]);
 
-  const allItemsSorted = useMemo(() => {
-    const itemTotals = aggregateByItem(curRows, dimension);
+  const currentStats = useMemo(() => buildProjectStats(currentRows), [currentRows]);
+  const compareStats = useMemo(() => buildProjectStats(compareRows), [compareRows]);
 
-    return [...itemTotals.entries()]
-      .sort(
-        (a, b) =>
-          (((b[1] as any)[config.metricKey] as number) || 0) -
-          (((a[1] as any)[config.metricKey] as number) || 0)
-      )
-      .map(([name]) => name);
-  }, [curRows, dimension, config.metricKey]);
-
-  const pivotData = useMemo(
-    () =>
-      buildPivot(
-        curRows,
-        dimension,
-        config.granularity,
-        config.metricKey,
-        config.tableCols
-      ),
-    [
-      curRows,
-      dimension,
-      config.granularity,
-      config.metricKey,
-      config.tableCols,
-    ]
-  );
-
-  const kpiData = useMemo(() => {
-    const curItems = aggregateByItem(curRows, dimension);
-    const prevItems = aggregateByItem(prevRows, dimension);
-
-    return config.kpiCards.map((name) => {
-      const cur = curItems.get(name);
-      const prev = prevItems.get(name);
-
-      const curVal = cur ? (((cur as any)[config.metricKey] as number) || 0) : 0;
-      const prevVal = prev ? (((prev as any)[config.metricKey] as number) || 0) : 0;
-
-      const delta =
-        prevVal && prevVal !== 0 ? ((curVal - prevVal) / prevVal) * 100 : null;
+  const kpis: ProjectKpi[] = useMemo(() => {
+    return PROJECTS.map((project) => {
+      const current = currentStats.get(project) || emptyProjectStats(project);
+      const compare = compareStats.get(project) || emptyProjectStats(project);
 
       return {
-        name,
-        curVal,
-        prevVal,
-        delta,
+        project,
+        current,
+        compare,
+        deltas: {
+          messages: deltaPct(current.messages, compare.messages),
+          messageCost: deltaPct(current.messageCost, compare.messageCost),
+          messageStartRate: deltaPct(
+            current.messageStartRate,
+            compare.messageStartRate
+          ),
+        },
       };
     });
-  }, [curRows, prevRows, dimension, config.kpiCards, config.metricKey]);
+  }, [currentStats, compareStats]);
 
-  const trendChips = useMemo(() => {
-    if (!pivotData.rows.length) return [];
+  const summary = useMemo(() => {
+    return kpis.reduce(
+      (acc, item) => {
+        acc.spend += item.current.spend;
+        acc.reach += item.current.reach;
+        acc.messages += item.current.messages;
+        return acc;
+      },
+      { spend: 0, reach: 0, messages: 0 }
+    );
+  }, [kpis]);
 
-    const out: { name: string; delta: number; isGood: boolean }[] = [];
+  const ranking = useMemo(() => {
+    return [...kpis].sort((a, b) => b.current.messages - a.current.messages);
+  }, [kpis]);
 
-    for (const name of config.tableCols) {
-      const series = pivotData.rows
-        .map((r) => r.values[name])
-        .filter((v) => v != null && v !== 0) as number[];
+  const trendProjects = useMemo(() => {
+    return ranking
+      .filter((item) => item.current.messages > 0)
+      .slice(0, topN)
+      .map((item) => item.project);
+  }, [ranking, topN]);
 
-      if (series.length < 2) continue;
-
-      const first = series[0];
-      const last = series[series.length - 1];
-
-      if (!first || last == null) continue;
-
-      const d = ((last - first) / first) * 100;
-
-      if (Math.abs(d) < TREND_THRESHOLD) continue;
-
-      const isGood =
-        (metric.dir === "up" && d > 0) ||
-        (metric.dir === "down" && d < 0);
-
-      out.push({
-        name,
-        delta: d,
-        isGood,
-      });
-    }
-
-    return out.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [pivotData.rows, config.tableCols, metric.dir]);
-
-  const itemOptions = allItemsSorted.map((n) => ({
-    key: n,
-    label: n,
-  }));
+  const trendData = useMemo(() => {
+    return buildTrendData(currentRows, trendProjects, trendMetric);
+  }, [currentRows, trendProjects, trendMetric]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-7xl px-6 py-8">
-        {/* Header */}
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
-              訊息廣告自訂分析工作台
+              項目成效 Dashboard
             </h1>
-            <p className="mt-1 font-mono text-sm text-slate-400">
-              {config.dateSince} → {config.dateUntil}
-              {hydrated && (
-                <span className="ml-3 font-sans text-xs text-slate-500">
-                  ⚙ 設定已記住
-                </span>
-              )}
+            <p className="mt-1 text-sm text-slate-400">
+              依照廣告名稱自動歸類項目，統計訊息量、訊息成本與訊息開始率。
+            </p>
+            <p className="mt-1 font-mono text-xs text-slate-500">
+              分析期間：{currentRange.since} → {currentRange.until} · 比較期間：
+              {compareRange.since} → {compareRange.until}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {PRESETS.map((p) => (
-              <button
-                key={p.key}
-                onClick={() => setPreset(p.key)}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition ${
-                  config.datePreset === p.key
-                    ? "border-sky-500/50 bg-sky-500/20 text-sky-300"
-                    : "border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-
-            <div
-              className={`flex items-center gap-1 rounded-lg border px-2 py-1 ${
-                config.datePreset === "custom"
-                  ? "border-sky-500/50 bg-sky-500/20"
-                  : "border-slate-800 bg-slate-900"
-              }`}
-            >
-              <input
-                type="date"
-                value={customSince}
-                onChange={(e) => setCustomSince(e.target.value)}
-                className="bg-transparent text-sm text-slate-200 outline-none [color-scheme:dark]"
-              />
-              <span className="text-slate-500">→</span>
-              <input
-                type="date"
-                value={customUntil}
-                onChange={(e) => setCustomUntil(e.target.value)}
-                className="bg-transparent text-sm text-slate-200 outline-none [color-scheme:dark]"
-              />
-              <button
-                onClick={applyCustom}
-                className="ml-1 rounded bg-sky-500 px-2 py-0.5 text-xs font-medium text-slate-950 hover:bg-sky-400"
-              >
-                套用
-              </button>
+          <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm">
+            <div className="text-xs uppercase tracking-wider text-slate-500">
+              目前分析項目
             </div>
-
-            <button
-              onClick={resetConfig}
-              className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200"
-            >
-              重設
-            </button>
+            <div className="mt-1 font-mono text-slate-200">
+              {PROJECTS.length} 個項目
+            </div>
           </div>
         </header>
 
@@ -524,358 +291,353 @@ export default function CustomPage() {
           </div>
         )}
 
-        {/* Global controls */}
-        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5 backdrop-blur">
-          <div className="grid gap-4 md:grid-cols-4">
-            <label className="flex flex-col gap-2">
-              <span className="text-[11px] uppercase tracking-wider text-slate-500">
-                維度
-              </span>
-              <select
-                value={config.dimensionKey}
-                onChange={(e) => {
-                  update("dimensionKey", e.target.value);
-                  update("tableCols", []);
-                  update("kpiCards", []);
-                }}
-                className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1.5 text-sm text-slate-200"
-              >
-                {DIMENSIONS.map((d) => (
-                  <option key={d.key} value={d.key}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-slate-100">主要分析期間</h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    這段期間會用來計算目前成效。
+                  </p>
+                </div>
 
-            <label className="flex flex-col gap-2">
-              <span className="text-[11px] uppercase tracking-wider text-slate-500">
-                指標
-              </span>
-              <select
-                value={config.metricKey}
-                onChange={(e) =>
-                  update("metricKey", e.target.value as keyof AggCells)
-                }
-                className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1.5 text-sm text-slate-200"
-              >
-                {METRICS.map((m) => (
-                  <option key={m.key} value={m.key}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <div className="flex flex-wrap gap-2">
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p.key}
+                      onClick={() => applyCurrentPreset(p.key)}
+                      className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+                        currentPreset === p.key
+                          ? "border-sky-500/50 bg-sky-500/20 text-sky-300"
+                          : "border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-            <div className="flex flex-col gap-2">
-              <span className="text-[11px] uppercase tracking-wider text-slate-500">
-                粒度
-              </span>
-              <GranularityToggle
-                value={config.granularity}
-                onChange={(v) => update("granularity", v)}
-              />
+              <div
+                className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 ${
+                  currentPreset === "custom"
+                    ? "border-sky-500/50 bg-sky-500/10"
+                    : "border-slate-800 bg-slate-950"
+                }`}
+              >
+                <input
+                  type="date"
+                  value={currentSinceInput}
+                  onChange={(e) => setCurrentSinceInput(e.target.value)}
+                  className="bg-transparent text-sm text-slate-200 outline-none [color-scheme:dark]"
+                />
+                <span className="text-slate-500">→</span>
+                <input
+                  type="date"
+                  value={currentUntilInput}
+                  onChange={(e) => setCurrentUntilInput(e.target.value)}
+                  className="bg-transparent text-sm text-slate-200 outline-none [color-scheme:dark]"
+                />
+                <button
+                  onClick={applyCurrentCustom}
+                  className="rounded bg-sky-500 px-2 py-1 text-xs font-medium text-slate-950 hover:bg-sky-400"
+                >
+                  套用主要期間
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <span className="text-[11px] uppercase tracking-wider text-slate-500">
-                資料狀態
-              </span>
-              <div className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-sm text-slate-300">
-                {loading ? "載入中…" : `${curRows.length} 筆原始資料`}
+            <div>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-slate-100">比較期間</h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    每個 KPI 都會顯示相對於此期間的變化百分比。
+                  </p>
+                </div>
+
+                <button
+                  onClick={resetCompareToPreviousPeriod}
+                  className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-600"
+                >
+                  使用上一期間
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">
+                <input
+                  type="date"
+                  value={compareSinceInput}
+                  onChange={(e) => setCompareSinceInput(e.target.value)}
+                  className="bg-transparent text-sm text-slate-200 outline-none [color-scheme:dark]"
+                />
+                <span className="text-slate-500">→</span>
+                <input
+                  type="date"
+                  value={compareUntilInput}
+                  onChange={(e) => setCompareUntilInput(e.target.value)}
+                  className="bg-transparent text-sm text-slate-200 outline-none [color-scheme:dark]"
+                />
+                <button
+                  onClick={applyCompareCustom}
+                  className="rounded bg-amber-500 px-2 py-1 text-xs font-medium text-slate-950 hover:bg-amber-400"
+                >
+                  套用比較期間
+                </button>
               </div>
             </div>
           </div>
         </section>
 
-        {/* KPI Cards Section */}
-        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5 backdrop-blur">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-100">KPI 卡片</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {dimension.label} · {metric.label} · 全期 vs 上一期間
-                <span className="ml-2 font-mono text-xs">
-                  ({config.kpiCards.length}/{MAX_COLS})
-                </span>
-              </p>
-            </div>
-
-            <MultiPicker
-              label="挑選項目"
-              options={itemOptions}
-              value={config.kpiCards}
-              onChange={(v) => update("kpiCards", v.slice(0, MAX_COLS))}
-              max={MAX_COLS}
-              searchable
-              width="w-80"
-            />
-          </div>
-
-          {config.kpiCards.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-800 py-10 text-center text-sm text-slate-500">
-              點右上角「挑選項目」，最多選 {MAX_COLS} 個 {dimension.label}
-              來顯示為 KPI 卡。
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {kpiData.map((d) => (
-                <KpiCard
-                  key={d.name}
-                  title={d.name}
-                  metric={metric}
-                  curVal={d.curVal}
-                  prevVal={d.prevVal}
-                  delta={d.delta}
-                />
-              ))}
-            </div>
-          )}
+        <section className="mb-6 grid gap-3 sm:grid-cols-3">
+          <SummaryCard label="總花費" value={fmtMoney(summary.spend)} />
+          <SummaryCard label="總觸及" value={fmtNum(summary.reach)} />
+          <SummaryCard label="總訊息量" value={fmtNum(summary.messages)} />
         </section>
 
-        {/* Pivot Table Section */}
-        <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 backdrop-blur">
+        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-slate-100">
-                {metric.label} by {dimension.label}
+                項目 KPI 卡片
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                選擇最多 {MAX_COLS} 個 {dimension.label}，比較每日、每週或每月走勢。
-                <span className="ml-2 font-mono text-xs">
-                  ({config.tableCols.length}/{MAX_COLS})
-                </span>
+                廣告名稱包含項目名稱時，會自動歸類到該項目。
               </p>
             </div>
 
-            <MultiPicker
-              label="挑選欄項目"
-              options={itemOptions}
-              value={config.tableCols}
-              onChange={(v) => update("tableCols", v.slice(0, MAX_COLS))}
-              max={MAX_COLS}
-              searchable
-              width="w-80"
-            />
+            <div className="text-sm text-slate-400">
+              {loading ? "載入中…" : `${currentRows.length} 筆廣告層級資料`}
+            </div>
           </div>
 
-          {trendChips.length > 0 && (
-            <div className="mb-4 flex flex-wrap gap-2">
-              {trendChips.map((c) => (
-                <span
-                  key={c.name}
-                  title={`${c.delta >= 0 ? "+" : ""}${c.delta.toFixed(
-                    1
-                  )}% 從第一桶到最後一桶`}
-                  className={`rounded-full border px-3 py-1 text-xs ${
-                    c.isGood
-                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                      : "border-rose-500/40 bg-rose-500/10 text-rose-300"
-                  }`}
-                >
-                  {c.delta >= 0 ? "▲" : "▼"} {truncate(c.name, 22)}{" "}
-                  {c.delta >= 0 ? "上升" : "下降"}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {kpis.map((item) => (
+              <ProjectCard key={item.project} item={item} />
+            ))}
+          </div>
+        </section>
 
-          {config.tableCols.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-800 py-10 text-center text-sm text-slate-500">
-              點右上角「挑選欄項目」，最多選 {MAX_COLS} 個 {dimension.label}
-              來組成比較表格。
+        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-100">項目排行</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                依照目前期間的訊息量排序。
+              </p>
             </div>
-          ) : (
-            <PivotTable
-              rows={pivotData.rows}
-              cols={config.tableCols}
-              metric={metric}
+          </div>
+
+          <ProjectTable rows={ranking} />
+        </section>
+
+        <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-100">項目趨勢</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                預設顯示訊息量最高的 Top {topN} 項目。
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={trendMetric}
+                onChange={(e) => setTrendMetric(e.target.value as TrendMetricKey)}
+                className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-200"
+              >
+                {TREND_METRICS.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={topN}
+                onChange={(e) => setTopN(Number(e.target.value))}
+                className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-200"
+              >
+                {[3, 5, 6, 8, 10, 12].map((n) => (
+                  <option key={n} value={n}>
+                    Top {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="h-80">
+            <ProjectTrendChart
+              data={trendData}
+              projects={trendProjects}
+              metric={selectedTrendMetric}
             />
-          )}
+          </div>
         </section>
 
         <footer className="py-4 text-center font-mono text-xs text-slate-600">
-          使用後端環境變數 FB_AD_ACCOUNT_ID 指定的 Meta 廣告帳號
+          使用 /api/insights 的 ad 層級資料，並以廣告名稱自動歸類項目
         </footer>
       </div>
     </div>
   );
 }
 
-// ============================================================
-// Sub-components
-// ============================================================
-
-function KpiCard({
-  title,
-  metric,
-  curVal,
-  prevVal,
-  delta,
-}: {
-  title: string;
-  metric: MetricDef;
-  curVal: number;
-  prevVal: number;
-  delta: number | null;
-}) {
-  const goodWhenPositive = metric.dir === "up";
-  const isGood =
-    delta !== null && (goodWhenPositive ? delta >= 0 : delta <= 0);
-
-  const tone = delta === null ? "neutral" : isGood ? "good" : "bad";
-
-  const styles = {
-    good: {
-      border: "border-emerald-500/50",
-      glow: "shadow-[0_0_20px_rgba(16,185,129,0.15)]",
-      title: "text-emerald-400",
-      pct: "text-emerald-300",
-      arrow: "text-emerald-400",
-    },
-    bad: {
-      border: "border-rose-500/50",
-      glow: "shadow-[0_0_20px_rgba(244,63,94,0.15)]",
-      title: "text-rose-400",
-      pct: "text-rose-300",
-      arrow: "text-rose-400",
-    },
-    neutral: {
-      border: "border-slate-700",
-      glow: "",
-      title: "text-slate-400",
-      pct: "text-slate-300",
-      arrow: "text-slate-500",
-    },
-  }[tone];
-
+function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      className={`rounded-xl border bg-slate-950 p-4 transition ${styles.border} ${styles.glow}`}
-    >
-      <div className={`truncate text-sm font-medium ${styles.title}`} title={title}>
-        {title}
+    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+      <div className="text-[11px] uppercase tracking-wider text-slate-500">
+        {label}
       </div>
-
       <div className="mt-2 text-2xl font-semibold tabular-nums text-slate-100">
-        {metric.fmt(curVal || 0)}
-      </div>
-
-      <div className={`mt-2 text-sm tabular-nums ${styles.pct}`}>
-        {delta === null ? "—" : `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}%`}
-      </div>
-
-      <div className={`mt-1 text-xs tabular-nums ${styles.arrow}`}>
-        {delta === null
-          ? "上一期間無資料"
-          : `${delta >= 0 ? "▲" : "▼"} ${metric.fmt(prevVal)} → ${metric.fmt(
-              curVal
-            )}`}
+        {value}
       </div>
     </div>
   );
 }
 
-function PivotTable({
-  rows,
-  cols,
-  metric,
-}: {
-  rows: PivotRow[];
-  cols: string[];
-  metric: MetricDef;
-}) {
-  const stats = useMemo(() => {
-    const out: Record<string, { min: number; max: number }> = {};
-
-    for (const c of cols) {
-      const vals = rows
-        .map((r) => r.values[c])
-        .filter((v) => v != null && v !== 0) as number[];
-
-      if (!vals.length) {
-        out[c] = { min: 0, max: 0 };
-        continue;
-      }
-
-      const sorted = [...vals].sort((a, b) => a - b);
-
-      out[c] = {
-        min: sorted[0],
-        max: sorted[sorted.length - 1],
-      };
-    }
-
-    return out;
-  }, [rows, cols]);
-
-  if (!rows.length) {
-    return (
-      <div className="py-10 text-center text-sm text-slate-500">
-        此範圍無資料
+function ProjectCard({ item }: { item: ProjectKpi }) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-950 p-5 transition hover:border-slate-700">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold text-slate-100">{item.project}</h3>
+        <div className="rounded-full bg-slate-900 px-2 py-1 text-xs text-slate-500">
+          {item.current.messages > 0 ? "有資料" : "無訊息"}
+        </div>
       </div>
-    );
-  }
 
+      <div className="space-y-4">
+        <MetricLine
+          label="訊息量"
+          value={fmtNum(item.current.messages)}
+          compareValue={fmtNum(item.compare.messages)}
+          delta={item.deltas.messages}
+          dir="up"
+        />
+
+        <MetricLine
+          label="訊息成本"
+          value={fmtMoney(item.current.messageCost)}
+          compareValue={fmtMoney(item.compare.messageCost)}
+          delta={item.deltas.messageCost}
+          dir="down"
+        />
+
+        <MetricLine
+          label="訊息開始率"
+          value={fmtPct(item.current.messageStartRate)}
+          compareValue={fmtPct(item.compare.messageStartRate)}
+          delta={item.deltas.messageStartRate}
+          dir="up"
+        />
+      </div>
+    </div>
+  );
+}
+
+function MetricLine({
+  label,
+  value,
+  compareValue,
+  delta,
+  dir,
+}: {
+  label: string;
+  value: string;
+  compareValue: string;
+  delta: number | null;
+  dir: "up" | "down";
+}) {
+  const isGood =
+    delta !== null && (dir === "up" ? delta >= 0 : delta <= 0);
+
+  const color =
+    delta === null
+      ? "text-slate-500"
+      : isGood
+      ? "text-emerald-400"
+      : "text-rose-400";
+
+  const arrow = delta === null ? "" : delta >= 0 ? "▲" : "▼";
+
+  return (
+    <div className="rounded-lg border border-slate-900 bg-slate-900/60 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-slate-400">{label}</span>
+        <span className="text-lg font-semibold tabular-nums text-slate-100">
+          {value}
+        </span>
+      </div>
+
+      <div className="mt-1 flex items-center justify-between gap-3 text-xs">
+        <span className="text-slate-600">比較：{compareValue}</span>
+        <span className={`tabular-nums ${color}`}>
+          {delta === null ? "—" : `${arrow} ${Math.abs(delta).toFixed(1)}%`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ProjectTable({ rows }: { rows: ProjectKpi[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-800">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-slate-800 bg-slate-950">
-            <th className="sticky left-0 z-10 bg-slate-950 px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-slate-500">
-              時間
+            <th className="px-3 py-3 text-left text-[11px] uppercase tracking-wider text-slate-500">
+              排名
             </th>
-
-            {cols.map((c) => {
-              const series = rows.map((r) => r.values[c]);
-
-              return (
-                <th
-                  key={c}
-                  className="min-w-[180px] px-3 py-3 text-left align-top text-[11px] font-medium uppercase tracking-wider text-slate-500"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="max-w-[110px] truncate text-slate-300" title={c}>
-                      {c}
-                    </span>
-                    <MiniSparkline values={series} dir={metric.dir} />
-                  </div>
-                </th>
-              );
-            })}
+            <th className="px-3 py-3 text-left text-[11px] uppercase tracking-wider text-slate-500">
+              項目
+            </th>
+            <th className="px-3 py-3 text-right text-[11px] uppercase tracking-wider text-slate-500">
+              花費
+            </th>
+            <th className="px-3 py-3 text-right text-[11px] uppercase tracking-wider text-slate-500">
+              觸及
+            </th>
+            <th className="px-3 py-3 text-right text-[11px] uppercase tracking-wider text-slate-500">
+              訊息量
+            </th>
+            <th className="px-3 py-3 text-right text-[11px] uppercase tracking-wider text-slate-500">
+              訊息成本
+            </th>
+            <th className="px-3 py-3 text-right text-[11px] uppercase tracking-wider text-slate-500">
+              訊息開始率
+            </th>
           </tr>
         </thead>
 
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.bucket} className="border-b border-slate-900 hover:bg-slate-800/40">
-              <td className="sticky left-0 z-10 whitespace-nowrap bg-slate-950 px-3 py-2.5 font-mono text-xs text-slate-400">
-                {r.bucketLabel}
+          {rows.map((item, index) => (
+            <tr
+              key={item.project}
+              className="border-b border-slate-900 hover:bg-slate-800/40"
+            >
+              <td className="px-3 py-2.5 font-mono text-xs text-slate-500">
+                {index + 1}
               </td>
-
-              {cols.map((c) => {
-                const v = r.values[c];
-
-                if (v == null) {
-                  return (
-                    <td key={c} className="px-3 py-2.5 text-right text-slate-700">
-                      —
-                    </td>
-                  );
-                }
-
-                const color = colorFor(v, stats[c], metric.dir);
-
-                return (
-                  <td
-                    key={c}
-                    className={`whitespace-nowrap px-3 py-2.5 text-right tabular-nums ${color}`}
-                    title={`${r.bucketLabel} — ${c}: ${metric.fmt(v)}`}
-                  >
-                    {metric.fmt(v)}
-                  </td>
-                );
-              })}
+              <td className="px-3 py-2.5 font-medium text-slate-200">
+                {item.project}
+              </td>
+              <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">
+                {fmtMoney(item.current.spend)}
+              </td>
+              <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">
+                {fmtNum(item.current.reach)}
+              </td>
+              <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">
+                {fmtNum(item.current.messages)}
+              </td>
+              <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">
+                {fmtMoney(item.current.messageCost)}
+              </td>
+              <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">
+                {fmtPct(item.current.messageStartRate)}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -884,281 +646,223 @@ function PivotTable({
   );
 }
 
-function MiniSparkline({
-  values,
-  dir,
+function ProjectTrendChart({
+  data,
+  projects,
+  metric,
 }: {
-  values: (number | null)[];
-  dir: "up" | "down";
+  data: any[];
+  projects: string[];
+  metric: {
+    key: TrendMetricKey;
+    label: string;
+    fmt: (n: number) => string;
+    dir: "up" | "down";
+  };
 }) {
-  const W = 60;
-  const H = 22;
-
-  const valid = values.filter((v) => v != null && v !== 0) as number[];
-
-  if (valid.length < 2) {
-    return <span className="inline-block h-[22px] w-[60px]" />;
+  if (!data.length || !projects.length) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-slate-500">
+        無資料
+      </div>
+    );
   }
 
-  const min = Math.min(...valid);
-  const max = Math.max(...valid);
-  const range = max - min || 1;
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+        <defs>
+          {projects.map((project, i) => (
+            <linearGradient
+              key={project}
+              id={`gradient-${safeId(project)}`}
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="1"
+            >
+              <stop
+                offset="0%"
+                stopColor={SERIES_COLORS[i % SERIES_COLORS.length]}
+                stopOpacity={0.35}
+              />
+              <stop
+                offset="100%"
+                stopColor={SERIES_COLORS[i % SERIES_COLORS.length]}
+                stopOpacity={0}
+              />
+            </linearGradient>
+          ))}
+        </defs>
 
-  const indexed: { x: number; y: number }[] = [];
-  const total = values.length;
+        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+        <XAxis dataKey="date" fontSize={11} stroke="#64748b" />
+        <YAxis
+          fontSize={11}
+          stroke="#64748b"
+          tickFormatter={(v) => compactFmt(Number(v) || 0)}
+        />
+        <Tooltip
+          contentStyle={{
+            background: "#0f172a",
+            border: "1px solid #334155",
+            borderRadius: 8,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+          }}
+          labelStyle={{ color: "#cbd5e1" }}
+          formatter={(v: any) => metric.fmt(Number(v) || 0)}
+        />
+        <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
 
-  values.forEach((v, i) => {
-    if (v == null || v === 0) return;
+        {projects.map((project, i) => (
+          <Area
+            key={project}
+            type="monotone"
+            dataKey={project}
+            name={project}
+            stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+            strokeWidth={2.4}
+            fill={`url(#gradient-${safeId(project)})`}
+            dot={false}
+            activeDot={{
+              r: 5,
+              fill: SERIES_COLORS[i % SERIES_COLORS.length],
+              stroke: "#0f172a",
+              strokeWidth: 2,
+            }}
+          />
+        ))}
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
 
-    const x = (i / Math.max(total - 1, 1)) * W;
-    const y = H - 2 - ((v - min) / range) * (H - 4);
-
-    indexed.push({
-      x,
-      y,
-    });
+async function fetchInsights(range: { since: string; until: string }) {
+  const sp = new URLSearchParams({
+    since: range.since,
+    until: range.until,
+    level: "ad",
+    time_increment: "1",
   });
 
-  if (indexed.length < 2) {
-    return <span className="inline-block h-[22px] w-[60px]" />;
+  return fetch(`/api/insights?${sp.toString()}`).then((r) => r.json());
+}
+
+function buildProjectStats(rows: Row[]): Map<string, ProjectStats> {
+  const map = new Map<string, ProjectStats>();
+
+  for (const project of PROJECTS) {
+    map.set(project, emptyProjectStats(project));
   }
 
-  const pointsStr = indexed
-    .map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-    .join(" ");
+  for (const row of rows) {
+    const project = matchProject(row.ad_name || "");
+    if (!project) continue;
 
-  const first = valid[0];
-  const last = valid[valid.length - 1];
-  const rising = last > first;
-  const isGood = (dir === "up" && rising) || (dir === "down" && !rising);
-  const stroke = isGood ? "#10b981" : "#f43f5e";
-  const end = indexed[indexed.length - 1];
+    const item = map.get(project) || emptyProjectStats(project);
 
-  return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="shrink-0">
-      <polyline
-        fill="none"
-        stroke={stroke}
-        strokeWidth="2"
-        points={pointsStr}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx={end.x} cy={end.y} r="2.5" fill={stroke} />
-    </svg>
-  );
+    item.spend += num(row.spend);
+    item.reach += num(row.reach);
+    item.messages += getMessages(row);
+
+    map.set(project, item);
+  }
+
+  for (const item of map.values()) {
+    item.messageCost = item.messages ? item.spend / item.messages : 0;
+    item.messageStartRate = item.reach
+      ? (item.messages / item.reach) * 100
+      : 0;
+  }
+
+  return map;
 }
 
-function MultiPicker({
-  label,
-  options,
-  value,
-  onChange,
-  searchable,
-  width,
-  max,
-}: {
-  label: string;
-  options: { key: string; label: string }[];
-  value: string[];
-  onChange: (v: string[]) => void;
-  searchable?: boolean;
-  width?: string;
-  max?: number;
-}) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
+function buildTrendData(
+  rows: Row[],
+  projects: string[],
+  metricKey: TrendMetricKey
+) {
+  const byDate = new Map<string, Map<string, ProjectStats>>();
 
-  useEffect(() => {
-    const fn = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
+  for (const row of rows) {
+    const date = row.date_start || "";
+    if (!date) continue;
 
-    document.addEventListener("mousedown", fn);
+    const project = matchProject(row.ad_name || "");
+    if (!project || !projects.includes(project)) continue;
 
-    return () => document.removeEventListener("mousedown", fn);
-  }, []);
+    let dateMap = byDate.get(date);
 
-  const toggle = (k: string) => {
-    if (value.includes(k)) {
-      onChange(value.filter((x) => x !== k));
-      return;
+    if (!dateMap) {
+      dateMap = new Map<string, ProjectStats>();
+      byDate.set(date, dateMap);
     }
 
-    if (!max || value.length < max) {
-      onChange([...value, k]);
+    let item = dateMap.get(project);
+
+    if (!item) {
+      item = emptyProjectStats(project);
+      dateMap.set(project, item);
     }
-  };
 
-  const filtered = q
-    ? options.filter((o) => o.label.toLowerCase().includes(q.toLowerCase()))
-    : options;
+    item.spend += num(row.spend);
+    item.reach += num(row.reach);
+    item.messages += getMessages(row);
+  }
 
-  const reachedMax = !!max && value.length >= max;
+  const dates = [...byDate.keys()].sort();
 
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-600"
-      >
-        {label} ({value.length}
-        {max ? `/${max}` : ""}) ▾
-      </button>
+  return dates.map((date) => {
+    const dateMap = byDate.get(date)!;
+    const out: Record<string, string | number> = { date };
 
-      {open && (
-        <div
-          className={`absolute right-0 z-20 mt-2 flex max-h-96 flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 p-2 shadow-xl ${
-            width || "w-64"
-          }`}
-        >
-          {searchable && (
-            <input
-              autoFocus
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="搜尋…"
-              className="mb-2 rounded border border-slate-800 bg-slate-950 px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-sky-600"
-            />
-          )}
+    for (const project of projects) {
+      const item = dateMap.get(project) || emptyProjectStats(project);
 
-          <div className="mb-2 flex justify-between px-1">
-            <span className="text-xs text-slate-500">
-              {reachedMax ? `已達上限 ${max}` : ""}
-            </span>
+      item.messageCost = item.messages ? item.spend / item.messages : 0;
+      item.messageStartRate = item.reach
+        ? (item.messages / item.reach) * 100
+        : 0;
 
-            <button
-              className="text-xs text-slate-400 hover:text-slate-200"
-              onClick={() => onChange([])}
-            >
-              清除
-            </button>
-          </div>
+      out[project] = item[metricKey];
+    }
 
-          <div className="flex-1 overflow-y-auto">
-            {filtered.map((o) => {
-              const checked = value.includes(o.key);
-              const disabled = !checked && reachedMax;
-
-              return (
-                <label
-                  key={o.key}
-                  className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-800 ${
-                    disabled ? "cursor-not-allowed opacity-40" : ""
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={disabled}
-                    onChange={() => toggle(o.key)}
-                    className="shrink-0 accent-sky-500"
-                  />
-                  <span className="truncate text-slate-200" title={o.label}>
-                    {o.label}
-                  </span>
-                </label>
-              );
-            })}
-
-            {!filtered.length && (
-              <div className="py-3 text-center text-xs text-slate-500">
-                無結果
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    return out;
+  });
 }
 
-function GranularityToggle({
-  value,
-  onChange,
-}: {
-  value: Granularity;
-  onChange: (v: Granularity) => void;
-}) {
-  const options: { k: Granularity; l: string }[] = [
-    { k: "day", l: "日" },
-    { k: "week", l: "週" },
-    { k: "month", l: "月" },
-  ];
-
-  return (
-    <div className="inline-flex rounded-lg border border-slate-800 bg-slate-900 p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.k}
-          onClick={() => onChange(o.k)}
-          className={`rounded-md px-3 py-1 text-sm transition ${
-            value === o.k
-              ? "bg-sky-500/20 text-sky-300"
-              : "text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          {o.l}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ============================================================
-// Helpers
-// ============================================================
-
-type AggCells = {
-  spend: number;
-  reach: number;
-  impressions: number;
-  cpm: number;
-  messagingConversationsStarted: number;
-  costPerMessagingConversationStarted: number;
-  startedRate: number;
-};
-    
-type PivotRow = {
-  bucket: string;
-  bucketLabel: string;
-  values: Record<string, number | null>;
-};
-
-function emptyCells(): AggCells {
+function emptyProjectStats(project: string): ProjectStats {
   return {
+    project,
     spend: 0,
     reach: 0,
-    impressions: 0,
-    cpm: 0,
-
-    messagingConversationsStarted: 0,
-    costPerMessagingConversationStarted: 0,
-    startedRate: 0,
+    messages: 0,
+    messageCost: 0,
+    messageStartRate: 0,
   };
 }
 
-function addRowToCells(cell: AggCells, r: Row) {
-  cell.spend += r.spend || 0;
-  cell.reach += r.reach || 0;
-  cell.impressions += r.impressions || 0;
-  cell.messagingConversationsStarted += r.messagingConversationsStarted || 0;
+function matchProject(adName: string) {
+  const normalized = adName.toLowerCase();
+
+  return PROJECTS.find((project) =>
+    normalized.includes(project.toLowerCase())
+  );
 }
 
-function recomputeDerived(cell: AggCells) {
-  cell.cpm = cell.impressions ? (cell.spend / cell.impressions) * 1000 : 0;
+function getMessages(row: Row) {
+  return num(row.started7d ?? row.messagingConversationsStarted);
+}
 
-  cell.costPerMessagingConversationStarted =
-    cell.messagingConversationsStarted
-      ? cell.spend / cell.messagingConversationsStarted
-      : 0;
+function num(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
 
-  cell.startedRate = cell.reach
-    ? (cell.messagingConversationsStarted / cell.reach) * 100
-    : 0;
+function deltaPct(current: number, compare: number) {
+  if (!compare) return null;
+  return ((current - compare) / compare) * 100;
 }
 
 function previousRange(r: { since: string; until: string }) {
@@ -1178,156 +882,12 @@ function previousRange(r: { since: string; until: string }) {
   };
 }
 
-function aggregateByItem(rows: Row[], dim: DimensionDef): Map<string, AggCells> {
-  const m = new Map<string, AggCells>();
-
-  for (const r of rows) {
-    const name = dim.getName(r);
-
-    if (!name) continue;
-
-    let cell = m.get(name);
-
-    if (!cell) {
-      cell = emptyCells();
-      m.set(name, cell);
-    }
-
-    addRowToCells(cell, r);
-  }
-
-  for (const cell of m.values()) {
-    recomputeDerived(cell);
-  }
-
-  return m;
+function compactFmt(v: number) {
+  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+  return String(Math.round(v));
 }
 
-function bucketDate(dateStr: string, g: Granularity): string {
-  if (!dateStr) return "";
-
-  if (g === "day") return dateStr;
-
-  if (g === "month") return dateStr.slice(0, 7);
-
-  const d = new Date(dateStr + "T00:00:00");
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-
-  d.setDate(d.getDate() + diff);
-
-  return iso(d);
-}
-
-function bucketLabel(bucket: string, g: Granularity): string {
-  if (g === "month") {
-    const [y] = bucket.split("-");
-    const monthName = new Date(`${bucket}-01T00:00:00`).toLocaleString(
-      "en-US",
-      { month: "short" }
-    );
-
-    return `${monthName} '${y.slice(2)}`;
-  }
-
-  const d = new Date(bucket + "T00:00:00");
-  const label = d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-
-  if (g === "week") return `週: ${label}`;
-
-  return label;
-}
-
-function buildPivot(
-  rows: Row[],
-  dim: DimensionDef,
-  g: Granularity,
-  metricKey: keyof AggCells,
-  cols: string[]
-): { rows: PivotRow[] } {
-  if (!rows.length || !cols.length) {
-    return { rows: [] };
-  }
-
-  const colSet = new Set(cols);
-  const grid = new Map<string, Map<string, AggCells>>();
-
-  for (const r of rows) {
-    const name = dim.getName(r);
-
-    if (!colSet.has(name)) continue;
-
-    const b = bucketDate(r.date_start || "", g);
-
-    if (!b) continue;
-
-    let row = grid.get(b);
-
-    if (!row) {
-      row = new Map<string, AggCells>();
-      grid.set(b, row);
-    }
-
-    let cell = row.get(name);
-
-    if (!cell) {
-      cell = emptyCells();
-      row.set(name, cell);
-    }
-
-    addRowToCells(cell, r);
-  }
-
-  const buckets = [...grid.keys()].sort();
-
-  const out: PivotRow[] = buckets.map((b) => {
-    const row = grid.get(b)!;
-    const values: Record<string, number | null> = {};
-
-    for (const name of cols) {
-      const cell = row.get(name);
-
-      if (!cell) {
-        values[name] = null;
-        continue;
-      }
-
-      recomputeDerived(cell);
-
-      values[name] = cell[metricKey] ?? 0;
-    }
-
-    return {
-      bucket: b,
-      bucketLabel: bucketLabel(b, g),
-      values,
-    };
-  });
-
-  return {
-    rows: out,
-  };
-}
-
-function colorFor(
-  v: number,
-  s: { min: number; max: number } | undefined,
-  dir: "up" | "down"
-) {
-  if (!s || s.max === s.min || v === 0) return "text-slate-300";
-
-  const norm = (v - s.min) / (s.max - s.min);
-  const goodness = dir === "up" ? norm : 1 - norm;
-
-  if (goodness >= 0.66) return "text-emerald-400 font-medium";
-  if (goodness <= 0.33) return "text-rose-400";
-
-  return "text-slate-200";
-}
-
-function truncate(s: string, n: number) {
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+function safeId(s: string) {
+  return s.replace(/[^\w-]/g, "");
 }
