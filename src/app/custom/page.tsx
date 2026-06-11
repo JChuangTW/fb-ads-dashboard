@@ -32,16 +32,9 @@ type Row = {
   cpm: number;
 
   messagingConversationsStarted: number;
-  messagingConversationsReplied: number;
-  thruPlay: number;
-  videoP50: number;
 
   costPerMessagingConversationStarted: number;
-  costPerMessagingConversationReplied: number;
   startedRate: number;
-  replyRate: number;
-  costPerThruPlay: number;
-  videoP50Rate: number;
 };
 
 type MetricDef = {
@@ -56,7 +49,6 @@ const METRICS: MetricDef[] = [
   { key: "reach", label: "觸及", fmt: fmtNum, dir: "up" },
   { key: "impressions", label: "曝光", fmt: fmtNum, dir: "up" },
   { key: "cpm", label: "CPM", fmt: fmtMoney, dir: "down" },
-
   {
     key: "messagingConversationsStarted",
     label: "訊息對話開始",
@@ -69,25 +61,7 @@ const METRICS: MetricDef[] = [
     fmt: fmtMoney,
     dir: "down",
   },
-  {
-    key: "messagingConversationsReplied",
-    label: "訊息回覆",
-    fmt: fmtNum,
-    dir: "up",
-  },
-  {
-    key: "costPerMessagingConversationReplied",
-    label: "每次訊息回覆成本",
-    fmt: fmtMoney,
-    dir: "down",
-  },
-  { key: "replyRate", label: "回覆率", fmt: fmtPct, dir: "up" },
   { key: "startedRate", label: "訊息開始率", fmt: fmtPct, dir: "up" },
-
-  { key: "thruPlay", label: "ThruPlay", fmt: fmtNum, dir: "up" },
-  { key: "costPerThruPlay", label: "每次 ThruPlay 成本", fmt: fmtMoney, dir: "down" },
-  { key: "videoP50", label: "影片播放 50%", fmt: fmtNum, dir: "up" },
-  { key: "videoP50Rate", label: "影片 50% / ThruPlay", fmt: fmtPct, dir: "up" },
 ];
 
 type DimensionDef = {
@@ -1143,20 +1117,11 @@ type AggCells = {
   reach: number;
   impressions: number;
   cpm: number;
-
   messagingConversationsStarted: number;
   costPerMessagingConversationStarted: number;
-  messagingConversationsReplied: number;
-  costPerMessagingConversationReplied: number;
   startedRate: number;
-  replyRate: number;
-
-  thruPlay: number;
-  costPerThruPlay: number;
-  videoP50: number;
-  videoP50Rate: number;
 };
-
+    
 type PivotRow = {
   bucket: string;
   bucketLabel: string;
@@ -1172,15 +1137,7 @@ function emptyCells(): AggCells {
 
     messagingConversationsStarted: 0,
     costPerMessagingConversationStarted: 0,
-    messagingConversationsReplied: 0,
-    costPerMessagingConversationReplied: 0,
     startedRate: 0,
-    replyRate: 0,
-
-    thruPlay: 0,
-    costPerThruPlay: 0,
-    videoP50: 0,
-    videoP50Rate: 0,
   };
 }
 
@@ -1189,9 +1146,6 @@ function addRowToCells(cell: AggCells, r: Row) {
   cell.reach += r.reach || 0;
   cell.impressions += r.impressions || 0;
   cell.messagingConversationsStarted += r.messagingConversationsStarted || 0;
-  cell.messagingConversationsReplied += r.messagingConversationsReplied || 0;
-  cell.thruPlay += r.thruPlay || 0;
-  cell.videoP50 += r.videoP50 || 0;
 }
 
 function recomputeDerived(cell: AggCells) {
@@ -1202,24 +1156,8 @@ function recomputeDerived(cell: AggCells) {
       ? cell.spend / cell.messagingConversationsStarted
       : 0;
 
-  cell.costPerMessagingConversationReplied =
-    cell.messagingConversationsReplied
-      ? cell.spend / cell.messagingConversationsReplied
-      : 0;
-
   cell.startedRate = cell.reach
     ? (cell.messagingConversationsStarted / cell.reach) * 100
-    : 0;
-
-  cell.replyRate = cell.messagingConversationsStarted
-    ? (cell.messagingConversationsReplied / cell.messagingConversationsStarted) *
-      100
-    : 0;
-
-  cell.costPerThruPlay = cell.thruPlay ? cell.spend / cell.thruPlay : 0;
-
-  cell.videoP50Rate = cell.thruPlay
-    ? (cell.videoP50 / cell.thruPlay) * 100
     : 0;
 }
 
