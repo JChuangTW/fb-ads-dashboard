@@ -217,17 +217,8 @@ export default function CustomPage() {
     });
   }, [currentStats, compareStats]);
 
-  const summary = useMemo(() => {
-    return kpis.reduce(
-      (acc, item) => {
-        acc.spend += item.current.spend;
-        acc.reach += item.current.reach;
-        acc.messages += item.current.messages;
-        return acc;
-      },
-      { spend: 0, reach: 0, messages: 0 }
-    );
-  }, [kpis]);
+  const summary = useMemo(() => buildSummaryStats(currentRows), [currentRows]);
+const compareSummary = useMemo(() => buildSummaryStats(compareRows), [compareRows]);
 
   const spendShareData = useMemo(() => {
     return kpis
@@ -366,10 +357,30 @@ export default function CustomPage() {
         </section>
 
         <section className="mb-6 grid gap-3 sm:grid-cols-3">
-          <SummaryCard label="總花費" value={fmtMoney(summary.spend)} />
-          <SummaryCard label="總觸及" value={fmtNum(summary.reach)} />
-          <SummaryCard label="總訊息量" value={fmtNum(summary.messages)} />
-        </section>
+  <SummaryCard
+    label="總花費"
+    value={summary.spend}
+    compareValue={compareSummary.spend}
+    fmt={fmtMoney}
+    dir="up"
+  />
+
+  <SummaryCard
+    label="總訊息量"
+    value={summary.messages}
+    compareValue={compareSummary.messages}
+    fmt={fmtNum}
+    dir="up"
+  />
+
+  <SummaryCard
+    label="平均訊息成本"
+    value={summary.messageCost}
+    compareValue={compareSummary.messageCost}
+    fmt={fmtMoney}
+    dir="down"
+  />
+</section>
 
         <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -434,11 +445,57 @@ export default function CustomPage() {
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function SummaryCard({
+  label,
+  value,
+  compareValue,
+  fmt,
+  dir,
+}: {
+  label: string;
+  value: number;
+  compareValue: number;
+  fmt: (n: number) => string;
+  dir: "up" | "down";
+}) {
+  const diff = value - compareValue;
+  const delta = deltaPct(value, compareValue);
+
+  const isGood =
+    delta !== null && (dir === "up" ? delta >= 0 : delta <= 0);
+
+  const color =
+    delta === null
+      ? "text-slate-500"
+      : isGood
+      ? "text-emerald-400"
+      : "text-rose-400";
+
+  const arrow = delta === null ? "" : delta >= 0 ? "▲" : "▼";
+
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <div className="text-[11px] uppercase tracking-wider text-slate-500">{label}</div>
-      <div className="mt-2 text-2xl font-semibold tabular-nums text-slate-100">{value}</div>
+      <div className="text-[11px] uppercase tracking-wider text-slate-500">
+        {label}
+      </div>
+
+      <div className="mt-2 text-2xl font-semibold tabular-nums text-slate-100">
+        {fmt(value || 0)}
+      </div>
+
+      <div className="mt-2 text-xs text-slate-500">
+        比較期間：{fmt(compareValue || 0)}
+      </div>
+
+      <div className={`mt-1 text-sm tabular-nums ${color}`}>
+        {delta === null
+          ? "—"
+          : `${arrow} ${Math.abs(delta).toFixed(1)}%`}
+        <span className="ml-2 text-xs text-slate-500">
+          {diff >= 0 ? "+" : ""}
+          {fmt(diff)}
+        </span>
+      </div>
     </div>
   );
 }
@@ -610,6 +667,26 @@ function buildProjectStats(rows: Row[]): Map<string, ProjectStats> {
   }
 
   return map;
+}
+function buildSummaryStats(rows: Row[]) {
+  let spend = 0;
+  let messages = 0;
+
+  for (const row of rows) {
+    const project = matchProject(row.ad_name || "");
+
+    // 只統計有符合指定項目的廣告
+    if (!project) continue;
+
+    spend += num(row.spend);
+    messages += getMessages(row);
+  }
+
+  return {
+    spend,
+    messages,
+    messageCost: messages ? spend / messages : 0,
+  };
 }
 
 function buildTrendData(rows: Row[], projects: string[], metricKey: TrendMetricKey) {
