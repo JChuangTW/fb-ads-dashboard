@@ -11,16 +11,18 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { fmtMoney, fmtNum, fmtPct, fmtDec, presetRange, iso } from "@/lib/format";
+import { fmtMoney, fmtNum, presetRange, iso } from "@/lib/format";
 
 type Row = {
   date_start?: string;
+
   campaign_id?: string;
   campaign_name?: string;
   adset_id?: string;
   adset_name?: string;
   ad_id?: string;
   ad_name?: string;
+
   publisher_platform?: string;
   platform_position?: string;
   impression_device?: string;
@@ -30,13 +32,16 @@ type Row = {
   country?: string;
   region?: string;
   user_segment_key?: string;
+
   spend: number;
   reach: number;
   cpm: number;
+
   started7d: number;
   costStarted7d: number;
   replied7d: number;
   costReplied7d: number;
+
   thruplayCount: number;
   videoP50: number;
 };
@@ -67,6 +72,14 @@ const METRICS: MetricDef[] = [
   { key: "videoP50", label: "影片觀看50%", fmt: fmtNum, dir: "up" },
 ];
 
+const MAIN_METRIC_KEYS = [
+  "spend",
+  "reach",
+  "started7d",
+  "costStarted7d",
+  "cpm",
+];
+
 const DEFAULT_COLS = [
   "spend",
   "reach",
@@ -79,7 +92,6 @@ const DEFAULT_COLS = [
   "videoP50",
 ];
 
-// -------- Dimensions (已移除受眾分類、國家、裝置) --------
 type DimensionDef = {
   key: string;
   label: string;
@@ -117,7 +129,8 @@ const DIMENSIONS: DimensionDef[] = [
     level: "account",
     breakdowns: "publisher_platform,platform_position",
     getKey: (r) => `${r.publisher_platform}|${r.platform_position}`,
-    getName: (r) => `${r.publisher_platform || "-"} / ${r.platform_position || "-"}`,
+    getName: (r) =>
+      `${r.publisher_platform || "-"} / ${r.platform_position || "-"}`,
   },
   {
     key: "publisher_platform",
@@ -165,7 +178,7 @@ const SERIES_COLORS = [
 ];
 
 export default function Home() {
-  const [preset, setPreset] = useState<string>("7d");
+  const [preset, setPreset] = useState("7d");
   const [range, setRange] = useState(presetRange("7d"));
   const [customSince, setCustomSince] = useState(range.since);
   const [customUntil, setCustomUntil] = useState(range.until);
@@ -176,15 +189,17 @@ export default function Home() {
   const [timeSeries, setTimeSeries] = useState<Row[]>([]);
   const [dimRows, setDimRows] = useState<Row[]>([]);
   const [dimTS, setDimTS] = useState<Row[]>([]);
-  const [prevTotals, setPrevTotals] = useState<ReturnType<typeof aggregate> | null>(null);
+  const [prevTotals, setPrevTotals] = useState<ReturnType<typeof aggregate> | null>(
+    null
+  );
 
-  const [dimensionKey, setDimensionKey] = useState<string>("campaign");
+  const [dimensionKey, setDimensionKey] = useState("campaign");
   const dimension = DIMENSIONS.find((d) => d.key === dimensionKey)!;
 
   const [chartMetrics, setChartMetrics] = useState<string[]>(["spend"]);
   const [visibleCols, setVisibleCols] = useState<string[]>(DEFAULT_COLS);
-  const [dimMetric, setDimMetric] = useState<string>("spend");
-  const [topN, setTopN] = useState<number>(5);
+  const [dimMetric, setDimMetric] = useState("spend");
+  const [topN, setTopN] = useState(5);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
 
   const [mainGran, setMainGran] = useState<Granularity>("day");
@@ -208,6 +223,7 @@ export default function Home() {
     setDimRange({ since: dimSinceInput, until: dimUntilInput });
     setDimRangeOverride(true);
   };
+
   const resetDimRange = () => {
     setDimRangeOverride(false);
     setDimRange(range);
@@ -237,43 +253,73 @@ export default function Home() {
   useEffect(() => {
     async function load() {
       setError(null);
+
       try {
         const q = (extra: Record<string, string>, r = range) => {
-          const sp = new URLSearchParams({ since: r.since, until: r.until, ...extra });
+          const sp = new URLSearchParams({
+            since: r.since,
+            until: r.until,
+            ...extra,
+          });
+
           return `/api/insights?${sp.toString()}`;
         };
+
         const prev = previousRange(range);
+
         const [ts, prevTs] = await Promise.all([
-          fetch(q({ level: "account", time_increment: "1" })).then((r) => r.json()),
-          fetch(q({ level: "account", time_increment: "1" }, prev)).then((r) => r.json()),
+          fetch(q({ level: "account", time_increment: "1" })).then((r) =>
+            r.json()
+          ),
+          fetch(q({ level: "account", time_increment: "1" }, prev)).then((r) =>
+            r.json()
+          ),
         ]);
+
         if (ts.error) throw new Error(ts.error);
+        if (prevTs.error) throw new Error(prevTs.error);
+
         setTimeSeries(ts.data || []);
         setPrevTotals(prevTs.data ? aggregate(prevTs.data) : null);
       } catch (e: any) {
         setError(e.message || "Unknown error");
       }
     }
+
     load();
-}, [range.since, range.until]);
-  
+  }, [range.since, range.until]);
+
   useEffect(() => {
     async function load() {
       setLoading(true);
+
       try {
         const q = (extra: Record<string, string>) => {
-          const sp = new URLSearchParams({ since: dimRange.since, until: dimRange.until, ...extra });
+          const sp = new URLSearchParams({
+            since: dimRange.since,
+            until: dimRange.until,
+            ...extra,
+          });
+
           return `/api/insights?${sp.toString()}`;
         };
-        const base: Record<string, string> = { level: dimension.level };
-        if (dimension.breakdowns) base.breakdowns = dimension.breakdowns;
+
+        const base: Record<string, string> = {
+          level: dimension.level,
+        };
+
+        if (dimension.breakdowns) {
+          base.breakdowns = dimension.breakdowns;
+        }
 
         const [agg, tsd] = await Promise.all([
           fetch(q(base)).then((r) => r.json()),
           fetch(q({ ...base, time_increment: "1" })).then((r) => r.json()),
         ]);
+
         if (agg.error) throw new Error(agg.error);
         if (tsd.error) throw new Error(tsd.error);
+
         setDimRows(agg.data || []);
         setDimTS(tsd.data || []);
       } catch (e: any) {
@@ -282,18 +328,25 @@ export default function Home() {
         setLoading(false);
       }
     }
+
     load();
-}, [dimensionKey, dimRange.since, dimRange.until]);
+  }, [dimensionKey, dimRange.since, dimRange.until, dimension]);
+
   const totals = useMemo(() => aggregate(timeSeries), [timeSeries]);
 
   const allNames = useMemo(() => {
     const totals = new Map<string, number>();
+
     for (const r of dimRows) {
       const k = dimension.getName(r);
       if (!k) continue;
+
       totals.set(k, (totals.get(k) || 0) + (((r as any)[dimMetric] as number) || 0));
     }
-    return [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+
+    return [...totals.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([k]) => k);
   }, [dimRows, dimension, dimMetric]);
 
   const effectiveKeys =
@@ -308,6 +361,7 @@ export default function Home() {
     () => rollupTimeSeries(timeSeries, mainGran),
     [timeSeries, mainGran]
   );
+
   const dimChartData = useMemo(
     () => rollupPivoted(pivoted, seriesKeys, dimGran),
     [pivoted, seriesKeys, dimGran]
@@ -318,11 +372,14 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-6 py-8">
         <header className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Facebook Ads 訊息對話數據主面板</h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Facebook Ads 訊息對話數據主面板
+            </h1>
             <p className="text-sm text-slate-400 mt-1 font-mono">
               {range.since} → {range.until}
             </p>
           </div>
+
           <div className="flex gap-2 flex-wrap items-center">
             {PRESETS.map((p) => (
               <button
@@ -330,13 +387,14 @@ export default function Home() {
                 onClick={() => setPreset(p.key)}
                 className={`px-3 py-1.5 rounded-lg text-sm border transition ${
                   preset === p.key
-                    ? "bg-sky-500/20 text-sky-300"
+                    ? "bg-sky-500/20 text-sky-300 border-sky-500/50"
                     : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600"
                 }`}
               >
                 {p.label}
               </button>
             ))}
+
             <div
               className={`flex items-center gap-1 px-2 py-1 rounded-lg border ${
                 preset === "custom"
@@ -350,13 +408,16 @@ export default function Home() {
                 onChange={(e) => setCustomSince(e.target.value)}
                 className="bg-transparent text-sm text-slate-200 outline-none [color-scheme:dark]"
               />
+
               <span className="text-slate-500">→</span>
+
               <input
                 type="date"
                 value={customUntil}
                 onChange={(e) => setCustomUntil(e.target.value)}
                 className="bg-transparent text-sm text-slate-200 outline-none [color-scheme:dark]"
               />
+
               <button
                 onClick={applyCustom}
                 className="ml-1 px-2 py-0.5 rounded text-xs bg-sky-500 text-slate-950 font-medium hover:bg-sky-400"
@@ -364,6 +425,7 @@ export default function Home() {
                 套用
               </button>
             </div>
+
             <button
               onClick={() => setRange({ ...range })}
               className="px-3 py-1.5 rounded-lg text-sm border bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600"
@@ -381,43 +443,45 @@ export default function Home() {
         )}
 
         {/* 核心 KPI 區塊 */}
-<section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-  {[
-    "spend",
-    "reach",
-    "started7d",
-    "costStarted7d",
-    "cpm",
-  ].map((key) => {
-    const m = METRICS.find((metric) => metric.key === key)!;
-    const cur = (totals as any)[m.key] as number;
-    const prev = prevTotals ? ((prevTotals as any)[m.key] as number) : null;
-    const delta = prev && prev !== 0 ? ((cur - prev) / prev) * 100 : null;
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+          {METRICS.filter((m) => MAIN_METRIC_KEYS.includes(m.key)).map((m) => {
+            const cur = (totals as any)[m.key] as number;
+            const prev = prevTotals ? ((prevTotals as any)[m.key] as number) : null;
+            const delta = prev && prev !== 0 ? ((cur - prev) / prev) * 100 : null;
 
-    return <Kpi key={m.key} metric={m} value={cur} delta={delta} />;
-  })}
-</section>
+            return <Kpi key={m.key} metric={m} value={cur} delta={delta} />;
+          })}
+        </section>
 
         {/* 趨勢圖表 */}
         <section className="bg-slate-900/60 backdrop-blur rounded-xl border border-slate-800 p-5 mb-6">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h2 className="font-semibold text-slate-200">時間趨勢</h2>
+
             <div className="flex gap-2 flex-wrap">
               <GranularityToggle value={mainGran} onChange={setMainGran} />
+
               <MultiPicker
                 label="指標"
-                options={METRICS.map((m) => ({ key: m.key, label: m.label }))}
+                options={METRICS.filter((m) =>
+                  MAIN_METRIC_KEYS.includes(m.key)
+                ).map((m) => ({
+                  key: m.key,
+                  label: m.label,
+                }))}
                 value={chartMetrics}
                 onChange={(v) => setChartMetrics(v.length ? v : ["spend"])}
               />
             </div>
           </div>
+
           <div className="h-80">
             <AreaTrendChart
               data={mainChartData}
               xKey="date_start"
               series={chartMetrics.map((k, i) => {
                 const m = METRICS.find((x) => x.key === k)!;
+
                 return {
                   key: k,
                   label: m.label,
@@ -432,7 +496,10 @@ export default function Home() {
         {/* 維度分析 */}
         <section className="bg-slate-900/60 backdrop-blur rounded-xl border border-slate-800 p-5 mb-6">
           <div className="mb-4 flex items-center gap-2 flex-wrap">
-            <div className="text-[11px] uppercase tracking-wider text-slate-500">維度日期</div>
+            <div className="text-[11px] uppercase tracking-wider text-slate-500">
+              維度日期
+            </div>
+
             <div
               className={`flex items-center gap-1 px-2 py-1 rounded-lg border ${
                 dimRangeOverride
@@ -446,13 +513,16 @@ export default function Home() {
                 onChange={(e) => setDimSinceInput(e.target.value)}
                 className="bg-transparent text-sm text-slate-200 outline-none [color-scheme:dark]"
               />
+
               <span className="text-slate-500">→</span>
+
               <input
                 type="date"
                 value={dimUntilInput}
                 onChange={(e) => setDimUntilInput(e.target.value)}
                 className="bg-transparent text-sm text-slate-200 outline-none [color-scheme:dark]"
               />
+
               <button
                 onClick={applyDimRange}
                 className="ml-1 px-2 py-0.5 rounded text-xs bg-amber-500 text-slate-950 font-medium hover:bg-amber-400"
@@ -460,9 +530,11 @@ export default function Home() {
                 套用
               </button>
             </div>
+
             {dimRangeOverride ? (
               <>
                 <span className="text-xs text-amber-400">獨立於全站日期</span>
+
                 <button
                   onClick={resetDimRange}
                   className="px-2 py-1 rounded text-xs bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200"
@@ -476,11 +548,15 @@ export default function Home() {
           </div>
 
           <div className="mb-5">
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2">分析維度</div>
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2">
+              分析維度
+            </div>
+
             <div className="flex gap-2 flex-wrap">
               {DIMENSIONS.map((d, i) => {
                 const active = dimensionKey === d.key;
                 const color = SERIES_COLORS[i % SERIES_COLORS.length];
+
                 return (
                   <button
                     key={d.key}
@@ -517,11 +593,14 @@ export default function Home() {
                 </span>{" "}
                 時間走勢
                 {selectedKeys.length > 0 ? (
-                  <span className="text-sky-400 ml-2">（自選 {selectedKeys.length} 項）</span>
+                  <span className="text-sky-400 ml-2">
+                    （自選 {selectedKeys.length} 項）
+                  </span>
                 ) : (
                   <span className="text-slate-500 ml-2">（預設 Top {topN}）</span>
                 )}
               </div>
+
               <div className="flex gap-2 flex-wrap">
                 <select
                   value={dimMetric}
@@ -534,6 +613,7 @@ export default function Home() {
                     </option>
                   ))}
                 </select>
+
                 <select
                   value={topN}
                   onChange={(e) => setTopN(Number(e.target.value))}
@@ -546,6 +626,7 @@ export default function Home() {
                     </option>
                   ))}
                 </select>
+
                 <MultiPicker
                   label="項目"
                   options={allNames.map((n) => ({ key: n, label: n }))}
@@ -554,6 +635,7 @@ export default function Home() {
                   searchable
                   width="w-80"
                 />
+
                 {selectedKeys.length > 0 && (
                   <button
                     onClick={() => setSelectedKeys([])}
@@ -563,9 +645,11 @@ export default function Home() {
                     重置
                   </button>
                 )}
+
                 <GranularityToggle value={dimGran} onChange={setDimGran} />
               </div>
             </div>
+
             <div className="h-72">
               <AreaTrendChart
                 data={dimChartData}
@@ -587,6 +671,7 @@ export default function Home() {
                 {dimRange.since} → {dimRange.until}
               </span>
             </div>
+
             <MultiPicker
               label="欄位"
               options={METRICS.map((m) => ({ key: m.key, label: m.label }))}
@@ -613,26 +698,48 @@ function AreaTrendChart({
 }: {
   data: any[];
   xKey: string;
-  series: { key: string; label: string; color: string; fmt: (n: number) => string }[];
+  series: {
+    key: string;
+    label: string;
+    color: string;
+    fmt: (n: number) => string;
+  }[];
 }) {
   if (!data.length || !series.length) {
-    return <div className="h-full flex items-center justify-center text-sm text-slate-500">無資料</div>;
+    return (
+      <div className="h-full flex items-center justify-center text-sm text-slate-500">
+        無資料
+      </div>
+    );
   }
+
   const idPrefix = useId();
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
         <defs>
           {series.map((s, i) => (
-            <linearGradient key={i} id={`${idPrefix}-${i}`} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient
+              key={i}
+              id={`${idPrefix}-${i}`}
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="1"
+            >
               <stop offset="0%" stopColor={s.color} stopOpacity={0.4} />
               <stop offset="100%" stopColor={s.color} stopOpacity={0} />
             </linearGradient>
           ))}
         </defs>
+
         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+
         <XAxis dataKey={xKey} fontSize={11} stroke="#64748b" />
+
         <YAxis fontSize={11} stroke="#64748b" tickFormatter={(v) => compactFmt(v)} />
+
         <Tooltip
           contentStyle={{
             background: "#0f172a",
@@ -646,7 +753,9 @@ function AreaTrendChart({
             return s ? s.fmt(Number(v) || 0) : v;
           }}
         />
+
         <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
+
         {series.map((s, i) => (
           <Area
             key={s.key}
@@ -657,7 +766,12 @@ function AreaTrendChart({
             strokeWidth={2.5}
             fill={`url(#${idPrefix}-${i})`}
             dot={{ r: 3, fill: "#0f172a", stroke: s.color, strokeWidth: 2 }}
-            activeDot={{ r: 6, fill: s.color, stroke: "#0f172a", strokeWidth: 2 }}
+            activeDot={{
+              r: 6,
+              fill: s.color,
+              stroke: "#0f172a",
+              strokeWidth: 2,
+            }}
           />
         ))}
       </AreaChart>
@@ -667,21 +781,39 @@ function AreaTrendChart({
 
 function useId() {
   const r = useRef<string | null>(null);
-  if (r.current === null) r.current = "g" + Math.random().toString(36).slice(2, 9);
+
+  if (r.current === null) {
+    r.current = "g" + Math.random().toString(36).slice(2, 9);
+  }
+
   return r.current;
 }
 
-function Kpi({ metric, value, delta }: { metric: MetricDef; value: number; delta: number | null }) {
+function Kpi({
+  metric,
+  value,
+  delta,
+}: {
+  metric: MetricDef;
+  value: number;
+  delta: number | null;
+}) {
   const goodWhenPositive = metric.dir === "up";
   const isGood = delta !== null && (goodWhenPositive ? delta >= 0 : delta <= 0);
-  const color = delta === null ? "text-slate-500" : isGood ? "text-emerald-400" : "text-rose-400";
+  const color =
+    delta === null ? "text-slate-500" : isGood ? "text-emerald-400" : "text-rose-400";
   const arrow = delta === null ? "" : delta >= 0 ? "▲" : "▼";
+
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 hover:border-slate-700 transition">
-      <div className="text-[11px] uppercase tracking-wider text-slate-500">{metric.label}</div>
+      <div className="text-[11px] uppercase tracking-wider text-slate-500">
+        {metric.label}
+      </div>
+
       <div className="text-xl font-semibold mt-1 tabular-nums text-slate-100">
         {metric.fmt(value || 0)}
       </div>
+
       <div className={`text-xs mt-1 tabular-nums ${color}`}>
         {delta === null ? "—" : `${arrow} ${Math.abs(delta).toFixed(1)}%`}
       </div>
@@ -707,20 +839,31 @@ function MultiPicker({
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const fn = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     };
+
     document.addEventListener("mousedown", fn);
+
     return () => document.removeEventListener("mousedown", fn);
   }, []);
+
   const toggle = (k: string) => {
-    if (value.includes(k)) onChange(value.filter((x) => x !== k));
-    else onChange([...value, k]);
+    if (value.includes(k)) {
+      onChange(value.filter((x) => x !== k));
+    } else {
+      onChange([...value, k]);
+    }
   };
+
   const filtered = q
     ? options.filter((o) => o.label.toLowerCase().includes(q.toLowerCase()))
     : options;
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -729,6 +872,7 @@ function MultiPicker({
       >
         {label} ({value.length}) ▾
       </button>
+
       {open && (
         <div
           className={`absolute right-0 mt-2 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-10 p-2 max-h-96 overflow-hidden flex flex-col ${
@@ -744,6 +888,7 @@ function MultiPicker({
               className="mb-2 px-2 py-1.5 text-sm bg-slate-950 border border-slate-800 rounded text-slate-200 outline-none focus:border-sky-600"
             />
           )}
+
           <div className="flex justify-between mb-2 px-1">
             <button
               className="text-xs text-sky-400 hover:text-sky-300"
@@ -751,10 +896,15 @@ function MultiPicker({
             >
               {q ? "選取搜尋結果" : "全選"}
             </button>
-            <button className="text-xs text-slate-400 hover:text-slate-200" onClick={() => onChange([])}>
+
+            <button
+              className="text-xs text-slate-400 hover:text-slate-200"
+              onClick={() => onChange([])}
+            >
               清除
             </button>
           </div>
+
           <div className="overflow-y-auto flex-1">
             {filtered.map((o) => (
               <label
@@ -767,11 +917,13 @@ function MultiPicker({
                   onChange={() => toggle(o.key)}
                   className="accent-sky-500 shrink-0"
                 />
+
                 <span className="text-slate-200 truncate" title={o.label}>
                   {o.label}
                 </span>
               </label>
             ))}
+
             {!filtered.length && (
               <div className="text-xs text-slate-500 py-3 text-center">無結果</div>
             )}
@@ -791,42 +943,63 @@ function Table({
   dimension: DimensionDef;
   visibleCols: string[];
 }) {
-  const [sortKey, setSortKey] = useState<string>("spend");
+  const [sortKey, setSortKey] = useState("spend");
   const [desc, setDesc] = useState(true);
 
   const cols = METRICS.filter((m) => visibleCols.includes(m.key));
 
   const stats = useMemo(() => {
     const s: Record<string, { min: number; max: number }> = {};
+
     for (const m of cols) {
-      const vals = rows.map((r) => (r as any)[m.key] as number).filter((v) => v > 0);
+      const vals = rows
+        .map((r) => (r as any)[m.key] as number)
+        .filter((v) => v > 0);
+
       if (!vals.length) {
         s[m.key] = { min: 0, max: 0 };
         continue;
       }
+
       const sorted = [...vals].sort((a, b) => a - b);
-      s[m.key] = { min: sorted[0], max: sorted[sorted.length - 1] };
+
+      s[m.key] = {
+        min: sorted[0],
+        max: sorted[sorted.length - 1],
+      };
     }
+
     return s;
   }, [rows, cols]);
 
   const sorted = useMemo(() => {
     const copy = [...rows];
+
     copy.sort((a: any, b: any) => {
-      const av = a[sortKey] ?? 0;
-      const bv = b[sortKey] ?? 0;
-      if (typeof av === "string") return desc ? bv.localeCompare(av) : av.localeCompare(bv);
+      const av = sortKey === "_name" ? dimension.getName(a) : a[sortKey] ?? 0;
+      const bv = sortKey === "_name" ? dimension.getName(b) : b[sortKey] ?? 0;
+
+      if (typeof av === "string") {
+        return desc ? bv.localeCompare(av) : av.localeCompare(bv);
+      }
+
       return desc ? bv - av : av - bv;
     });
-    return copy;
-  }, [rows, sortKey, desc]);
 
-  const renderHeader = (key: string, label: string, align: "left" | "right" = "right") => (
+    return copy;
+  }, [rows, sortKey, desc, dimension]);
+
+  const renderHeader = (
+    key: string,
+    label: string,
+    align: "left" | "right" = "right"
+  ) => (
     <th
       key={key}
       onClick={() => {
-        if (sortKey === key) setDesc(!desc);
-        else {
+        if (sortKey === key) {
+          setDesc(!desc);
+        } else {
           setSortKey(key);
           setDesc(true);
         }
@@ -852,17 +1025,26 @@ function Table({
             {cols.map((c) => renderHeader(c.key, c.label))}
           </tr>
         </thead>
+
         <tbody>
           {sorted.map((r, i) => (
             <tr key={i} className="border-b border-slate-900 hover:bg-slate-800/40">
-              <td className="px-3 py-2.5 max-w-[280px] truncate text-slate-200" title={dimension.getName(r)}>
+              <td
+                className="px-3 py-2.5 max-w-[280px] truncate text-slate-200"
+                title={dimension.getName(r)}
+              >
                 {dimension.getName(r)}
               </td>
+
               {cols.map((c) => {
                 const v = ((r as any)[c.key] as number) || 0;
                 const color = colorFor(v, stats[c.key], c.dir);
+
                 return (
-                  <td key={c.key} className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap ${color}`}>
+                  <td
+                    key={c.key}
+                    className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap ${color}`}
+                  >
                     {c.fmt(v)}
                   </td>
                 );
@@ -875,12 +1057,19 @@ function Table({
   );
 }
 
-function colorFor(v: number, s: { min: number; max: number } | undefined, dir: "up" | "down") {
+function colorFor(
+  v: number,
+  s: { min: number; max: number } | undefined,
+  dir: "up" | "down"
+) {
   if (!s || s.max === s.min || v === 0) return "text-slate-300";
+
   const norm = (v - s.min) / (s.max - s.min);
   const goodness = dir === "up" ? norm : 1 - norm;
+
   if (goodness >= 0.66) return "text-emerald-400 font-medium";
   if (goodness <= 0.33) return "text-rose-400";
+
   return "text-slate-200";
 }
 
@@ -888,11 +1077,17 @@ function previousRange(r: { since: string; until: string }) {
   const since = new Date(r.since);
   const until = new Date(r.until);
   const days = Math.round((until.getTime() - since.getTime()) / 86400000) + 1;
+
   const prevUntil = new Date(since);
   prevUntil.setDate(prevUntil.getDate() - 1);
+
   const prevSince = new Date(prevUntil);
   prevSince.setDate(prevSince.getDate() - (days - 1));
-  return { since: iso(prevSince), until: iso(prevUntil) };
+
+  return {
+    since: iso(prevSince),
+    until: iso(prevUntil),
+  };
 }
 
 function aggregate(rows: Row[]) {
@@ -904,16 +1099,41 @@ function aggregate(rows: Row[]) {
       a.replied7d += r.replied7d || 0;
       a.thruplayCount += r.thruplayCount || 0;
       a.videoP50 += r.videoP50 || 0;
+
+      if (r.cpm) {
+        a.cpmSum += r.cpm;
+        a.cpmCount += 1;
+      }
+
       return a;
     },
-    { spend: 0, reach: 0, started7d: 0, replied7d: 0, thruplayCount: 0, videoP50: 0 }
+    {
+      spend: 0,
+      reach: 0,
+      started7d: 0,
+      replied7d: 0,
+      thruplayCount: 0,
+      videoP50: 0,
+      cpmSum: 0,
+      cpmCount: 0,
+    }
   );
-  
+
   const costStarted7d = t.started7d ? t.spend / t.started7d : 0;
   const costReplied7d = t.replied7d ? t.spend / t.replied7d : 0;
-  const cpm = rows.length ? rows.reduce((sum, r) => sum + (r.cpm || 0), 0) / rows.length : 0;
+  const cpm = t.cpmCount ? t.cpmSum / t.cpmCount : 0;
 
-  return { ...t, cpm, costStarted7d, costReplied7d };
+  return {
+    spend: t.spend,
+    reach: t.reach,
+    cpm,
+    started7d: t.started7d,
+    costStarted7d,
+    replied7d: t.replied7d,
+    costReplied7d,
+    thruplayCount: t.thruplayCount,
+    videoP50: t.videoP50,
+  };
 }
 
 function pivotByKeys(
@@ -922,29 +1142,52 @@ function pivotByKeys(
   metric: string,
   keys: string[]
 ) {
-  if (!rows.length || !keys.length) return { pivoted: [] as any[], seriesKeys: keys };
+  if (!rows.length || !keys.length) {
+    return {
+      pivoted: [] as any[],
+      seriesKeys: keys,
+    };
+  }
+
   const keySet = new Set(keys);
   const byDate = new Map<string, any>();
+
   for (const r of rows) {
     const k = nameFn(r);
+
     if (!keySet.has(k)) continue;
+
     const d = r.date_start || "";
-    if (!byDate.has(d)) byDate.set(d, { date: d });
+
+    if (!byDate.has(d)) {
+      byDate.set(d, { date: d });
+    }
+
     const row = byDate.get(d);
+
     row[k] = (row[k] || 0) + (((r as any)[metric] as number) || 0);
   }
+
   const pivoted = [...byDate.values()]
     .map((row) => {
-      for (const k of keys) if (row[k] == null) row[k] = 0;
+      for (const k of keys) {
+        if (row[k] == null) row[k] = 0;
+      }
+
       return row;
     })
     .sort((a, b) => a.date.localeCompare(b.date));
-  return { pivoted, seriesKeys: keys };
+
+  return {
+    pivoted,
+    seriesKeys: keys,
+  };
 }
 
 function compactFmt(v: number): string {
   if (Math.abs(v) >= 1_000_000) return (v / 1_000_000).toFixed(1) + "M";
   if (Math.abs(v) >= 1_000) return (v / 1_000).toFixed(1) + "K";
+
   return String(v);
 }
 
@@ -958,20 +1201,28 @@ function bucketDate(dateStr: string, g: Granularity): string {
   if (!dateStr) return "";
   if (g === "day") return dateStr;
   if (g === "month") return dateStr.slice(0, 7);
+
   const d = new Date(dateStr + "T00:00:00");
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
+
   d.setDate(d.getDate() + diff);
+
   return iso(d);
 }
 
 function rollupTimeSeries(rows: Row[], g: Granularity): any[] {
   if (g === "day") return rows;
+
   const byBucket = new Map<string, any>();
+
   for (const r of rows) {
     const k = bucketDate(r.date_start || "", g);
+
     if (!k) continue;
+
     let e = byBucket.get(k);
+
     if (!e) {
       e = {
         date_start: k,
@@ -984,44 +1235,66 @@ function rollupTimeSeries(rows: Row[], g: Granularity): any[] {
         _cpmSum: 0,
         _cpmCount: 0,
       };
+
       byBucket.set(k, e);
     }
+
     e.spend += r.spend || 0;
     e.reach += r.reach || 0;
     e.started7d += r.started7d || 0;
     e.replied7d += r.replied7d || 0;
     e.thruplayCount += r.thruplayCount || 0;
     e.videoP50 += r.videoP50 || 0;
+
     if (r.cpm) {
       e._cpmSum += r.cpm;
-      e._cpmCount++;
+      e._cpmCount += 1;
     }
   }
-  const out = [...byBucket.values()].sort((a, b) => a.date_start.localeCompare(b.date_start));
+
+  const out = [...byBucket.values()].sort((a, b) =>
+    a.date_start.localeCompare(b.date_start)
+  );
+
   for (const e of out) {
     e.costStarted7d = e.started7d ? e.spend / e.started7d : 0;
     e.costReplied7d = e.replied7d ? e.spend / e.replied7d : 0;
     e.cpm = e._cpmCount ? e._cpmSum / e._cpmCount : 0;
+
     delete e._cpmSum;
     delete e._cpmCount;
   }
+
   return out;
 }
 
 function rollupPivoted(data: any[], keys: string[], g: Granularity): any[] {
   if (g === "day" || !data.length) return data;
+
   const byBucket = new Map<string, any>();
+
   for (const row of data) {
     const k = bucketDate(row.date, g);
+
     if (!k) continue;
+
     let e = byBucket.get(k);
+
     if (!e) {
       e = { date: k };
-      for (const s of keys) e[s] = 0;
+
+      for (const s of keys) {
+        e[s] = 0;
+      }
+
       byBucket.set(k, e);
     }
-    for (const s of keys) e[s] += row[s] || 0;
+
+    for (const s of keys) {
+      e[s] += row[s] || 0;
+    }
   }
+
   return [...byBucket.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -1037,6 +1310,7 @@ function GranularityToggle({
     { k: "week", l: "週" },
     { k: "month", l: "月" },
   ];
+
   return (
     <div className="inline-flex rounded-lg border border-slate-800 bg-slate-900 p-0.5">
       {options.map((o) => (
