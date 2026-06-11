@@ -63,13 +63,9 @@ type MetricDef = {
 const METRICS: MetricDef[] = [
   { key: "spend", label: "花費", fmt: fmtMoney, dir: "up" },
   { key: "reach", label: "觸及人數", fmt: fmtNum, dir: "up" },
-  { key: "cpm", label: "CPM", fmt: fmtMoney, dir: "down" },
   { key: "started7d", label: "發起對話", fmt: fmtNum, dir: "up" },
   { key: "costStarted7d", label: "發起對話成本", fmt: fmtMoney, dir: "down" },
-  { key: "replied7d", label: "回覆對話", fmt: fmtNum, dir: "up" },
-  { key: "costReplied7d", label: "回覆對話成本", fmt: fmtMoney, dir: "down" },
-  { key: "thruplayCount", label: "ThruPlay 次數", fmt: fmtNum, dir: "up" },
-  { key: "videoP50", label: "影片觀看50%", fmt: fmtNum, dir: "up" },
+  { key: "cpm", label: "CPM", fmt: fmtMoney, dir: "down" },
 ];
 
 const MAIN_METRIC_KEYS = [
@@ -83,13 +79,9 @@ const MAIN_METRIC_KEYS = [
 const DEFAULT_COLS = [
   "spend",
   "reach",
-  "cpm",
   "started7d",
   "costStarted7d",
-  "replied7d",
-  "costReplied7d",
-  "thruplayCount",
-  "videoP50",
+  "cpm",
 ];
 
 type DimensionDef = {
