@@ -1,15 +1,17 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 export default function LoginPage() {
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/";
-
+  const [nextUrl, setNextUrl] = useState("/");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setNextUrl(params.get("next") || "/");
+  }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -33,7 +35,7 @@ export default function LoginPage() {
         return;
       }
 
-      window.location.href = next;
+      window.location.href = nextUrl;
     } catch {
       setError("登入失敗，請稍後再試");
     } finally {
@@ -48,9 +50,11 @@ export default function LoginPage() {
         className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl"
       >
         <div className="mb-6">
-          <h1 className="text-xl font-bold">杰美學診所 Meta ads dashboard</h1>
+          <h1 className="text-xl font-bold">
+            杰美學診所 Meta ads dashboard
+          </h1>
           <p className="mt-2 text-sm text-slate-400">
-            請輸入密碼以查看客戶廣告數據。
+            請輸入密碼以查看廣告數據。
           </p>
         </div>
 
