@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/", label: "主頁" },
-  { href: "/custom", label: "自訂" },
+  { href: "/custom", label: "項目成效" },
 ];
 
 const ACCOUNT_NAME_LABEL = "drjayclinic";
@@ -19,10 +19,7 @@ export default function TopNav() {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
         <div className="flex items-center gap-6">
           {TABS.map((tab) => {
-            const active =
-              tab.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(tab.href);
+            const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
 
             return (
               <Link
@@ -42,16 +39,9 @@ export default function TopNav() {
 
         <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-300">
           <span className="text-slate-500">廣告帳號</span>
-
-          <span className="font-medium text-slate-100">
-            {ACCOUNT_NAME_LABEL}
-          </span>
-
+          <span className="font-medium text-slate-100">{ACCOUNT_NAME_LABEL}</span>
           <span className="text-slate-600">·</span>
-
-          <span className="font-mono text-xs text-slate-400">
-            {ACCOUNT_ID_LABEL}
-          </span>
+          <span className="font-mono text-xs text-slate-400">{ACCOUNT_ID_LABEL}</span>
         </div>
       </div>
     </nav>
