@@ -12,7 +12,6 @@ import {
   Legend,
 } from "recharts";
 import { fmtMoney, fmtNum, fmtPct, fmtDec, presetRange, iso } from "@/lib/format";
-import { useSelectedAccount } from "@/lib/use-account";
 
 type Row = {
   date_start?: string;
@@ -166,8 +165,6 @@ const SERIES_COLORS = [
 ];
 
 export default function Home() {
-  const { accountId, hydrated: accountHydrated } = useSelectedAccount();
-
   const [preset, setPreset] = useState<string>("7d");
   const [range, setRange] = useState(presetRange("7d"));
   const [customSince, setCustomSince] = useState(range.since);
@@ -238,13 +235,11 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (!accountHydrated) return;
     async function load() {
       setError(null);
       try {
         const q = (extra: Record<string, string>, r = range) => {
           const sp = new URLSearchParams({ since: r.since, until: r.until, ...extra });
-          if (accountId) sp.set("account_id", accountId);
           return `/api/insights?${sp.toString()}`;
         };
         const prev = previousRange(range);
@@ -260,16 +255,14 @@ export default function Home() {
       }
     }
     load();
-  }, [range.since, range.until, accountId, accountHydrated]);
-
+}, [range.since, range.until]);
+  
   useEffect(() => {
-    if (!accountHydrated) return;
     async function load() {
       setLoading(true);
       try {
         const q = (extra: Record<string, string>) => {
           const sp = new URLSearchParams({ since: dimRange.since, until: dimRange.until, ...extra });
-          if (accountId) sp.set("account_id", accountId);
           return `/api/insights?${sp.toString()}`;
         };
         const base: Record<string, string> = { level: dimension.level };
@@ -290,8 +283,7 @@ export default function Home() {
       }
     }
     load();
-  }, [dimensionKey, dimRange.since, dimRange.until, accountId, accountHydrated]);
-
+}, [dimensionKey, dimRange.since, dimRange.until]);
   const totals = useMemo(() => aggregate(timeSeries), [timeSeries]);
 
   const allNames = useMemo(() => {
