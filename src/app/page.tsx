@@ -381,14 +381,22 @@ export default function Home() {
         )}
 
         {/* 核心 KPI 區塊 */}
-        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-          {METRICS.filter((m) => ["spend", "reach", "started7d", "costStarted7d", "replied7d"].includes(m.key)).map((m) => {
-            const cur = (totals as any)[m.key] as number;
-            const prev = prevTotals ? ((prevTotals as any)[m.key] as number) : null;
-            const delta = prev && prev !== 0 ? ((cur - prev) / prev) * 100 : null;
-            return <Kpi key={m.key} metric={m} value={cur} delta={delta} />;
-          })}
-        </section>
+<section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+  {[
+    "spend",
+    "reach",
+    "started7d",
+    "costStarted7d",
+    "cpm",
+  ].map((key) => {
+    const m = METRICS.find((metric) => metric.key === key)!;
+    const cur = (totals as any)[m.key] as number;
+    const prev = prevTotals ? ((prevTotals as any)[m.key] as number) : null;
+    const delta = prev && prev !== 0 ? ((cur - prev) / prev) * 100 : null;
+
+    return <Kpi key={m.key} metric={m} value={cur} delta={delta} />;
+  })}
+</section>
 
         {/* 趨勢圖表 */}
         <section className="bg-slate-900/60 backdrop-blur rounded-xl border border-slate-800 p-5 mb-6">
