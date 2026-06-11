@@ -40,8 +40,6 @@ export default function TopNav() {
         <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-300">
           <span className="text-slate-500">廣告帳號</span>
           <span className="font-medium text-slate-100">{ACCOUNT_NAME_LABEL}</span>
-          <span className="text-slate-600">·</span>
-          <span className="font-mono text-xs text-slate-400">{ACCOUNT_ID_LABEL}</span>
         </div>
       </div>
     </nav>
