@@ -4,7 +4,7 @@ const COOKIE_NAME = "dashboard_auth";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export async function POST(req: NextRequest) {
-  const password = process.env.DASHBOARD_PASSWORD;
+  const password = "82844226";
 
   if (!password) {
     return NextResponse.json(
