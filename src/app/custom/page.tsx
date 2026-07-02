@@ -54,17 +54,14 @@ type TrendMetricKey = "messages" | "messageCost" | "messageStartRate";
 const PROJECTS = [
   "皮秒",
   "miraDry",
-  "逆時針",
+  "青萃光",
   "微針筆",
   "熊貓針",
   "鳳凰電波",
-  "隆鼻",
   "雙眼皮",
   "提眉",
-  "抽脂",
   "異體真皮",
   "中下臉拉皮",
-  "母親節",
 ];
 
 const TREND_METRICS: {
@@ -118,7 +115,6 @@ export default function CustomPage() {
   const [selectedTrendProjects, setSelectedTrendProjects] = useState<string[]>([
     "皮秒",
     "miraDry",
-    "逆時針",
     "微針筆",
     "熊貓針",
     "鳳凰電波",
