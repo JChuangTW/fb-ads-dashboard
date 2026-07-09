@@ -14,7 +14,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { fmtMoney, fmtNum, fmtPct, iso, presetRange } from "@/lib/format";
+import { 
+  fmtMoney, 
+  fmtNum, 
+  fmtPct, 
+  iso, 
+  getRangeByPreset, 
+  previousRange,
+} from "@/lib/format";
 
 type Row = {
   date_start?: string;
