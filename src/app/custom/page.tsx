@@ -388,7 +388,7 @@ const compareSummary = useMemo(() => buildSummaryStats(compareRows), [compareRow
             </div>
             <div className="text-sm text-slate-400">{loading ? "載入中…" : `${currentRows.length} 筆廣告層級資料`}</div>
           </div>
-          <div className="h-80">
+          <div className="h-auto md:h-80">
             <SpendShareChart data={spendShareData} />
           </div>
         </section>
@@ -507,8 +507,8 @@ function SpendShareChart({ data }: { data: { project: string; spend: number }[] 
 
   return (
     <div className="flex h-full flex-col gap-6 md:flex-row md:items-center">
-      {/* 左側：圓餅圖 (稍微縮小內外徑讓畫面更有呼吸空間) */}
-      <div className="h-64 w-full md:h-full md:w-1/2 lg:w-7/12">
+      {/* 左側 / 上方：圓餅圖 (使用 % 動態縮放，並給予手機版基本高度) */}
+      <div className="h-[220px] w-full md:h-full md:w-1/2 lg:w-5/12">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie 
@@ -517,8 +517,8 @@ function SpendShareChart({ data }: { data: { project: string; spend: number }[] 
               nameKey="project" 
               cx="50%" 
               cy="50%" 
-              outerRadius={110} 
-              innerRadius={65} 
+              outerRadius="90%" /* 改為百分比，手機上不裁切 */
+              innerRadius="55%" 
               paddingAngle={2}
             >
               {data.map((entry, index) => (
@@ -537,23 +537,28 @@ function SpendShareChart({ data }: { data: { project: string; spend: number }[] 
         </ResponsiveContainer>
       </div>
 
-      {/* 右側：文字數據列表 (加入滾動條以防項目過多) */}
-      <div className="flex max-h-full w-full flex-col overflow-y-auto pr-4 md:w-1/2 lg:w-5/12">
-        <div className="space-y-3 py-2">
+      {/* 右側 / 下方：改用 grid-cols-2 讓列表自動雙欄並排 */}
+      <div className="w-full md:w-1/2 lg:w-7/12">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 py-2 lg:grid-cols-2">
           {data.map((item, index) => {
             const pct = total ? (item.spend / total) * 100 : 0;
             return (
-              <div key={item.project} className="flex items-center justify-between text-sm hover:bg-slate-800/50 rounded px-2 py-1 transition-colors -mx-2">
-                <div className="flex items-center gap-3">
+              <div 
+                key={item.project} 
+                className="flex flex-wrap items-center justify-between gap-1 rounded px-2 py-1 text-sm transition-colors hover:bg-slate-800/50"
+              >
+                <div className="flex min-w-0 items-center gap-2">
                   <span
                     className="h-3 w-3 shrink-0 rounded-full"
                     style={{ backgroundColor: SERIES_COLORS[index % SERIES_COLORS.length] }}
                   />
-                  <span className="font-medium text-slate-200">{item.project}</span>
+                  <span className="truncate font-medium text-slate-200" title={item.project}>
+                    {item.project}
+                  </span>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex shrink-0 items-center gap-2">
                   <span className="tabular-nums text-slate-300">{fmtMoney(item.spend)}</span>
-                  <span className="w-12 text-right tabular-nums text-slate-500">{pct.toFixed(1)}%</span>
+                  <span className="w-9 text-right tabular-nums text-slate-500">{pct.toFixed(0)}%</span>
                 </div>
               </div>
             );
