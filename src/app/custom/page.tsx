@@ -506,24 +506,61 @@ function SpendShareChart({ data }: { data: { project: string; spend: number }[] 
   const total = data.reduce((sum, item) => sum + item.spend, 0);
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <PieChart>
-        <Pie data={data} dataKey="spend" nameKey="project" cx="50%" cy="50%" outerRadius={110} innerRadius={55} paddingAngle={2}>
-          {data.map((entry, index) => (
-            <Cell key={entry.project} fill={SERIES_COLORS[index % SERIES_COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip
-          contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8 }}
-          formatter={(value: any, _name: any, item: any) => {
-            const spend = Number(value) || 0;
-            const pct = total ? (spend / total) * 100 : 0;
-            return [`${fmtMoney(spend)} (${pct.toFixed(1)}%)`, item?.payload?.project || ""];
-          }}
-        />
-        <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
-      </PieChart>
-    </ResponsiveContainer>
+    <div className="flex h-full flex-col gap-6 md:flex-row md:items-center">
+      {/* 左側：圓餅圖 (稍微縮小內外徑讓畫面更有呼吸空間) */}
+      <div className="h-64 w-full md:h-full md:w-1/2 lg:w-7/12">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie 
+              data={data} 
+              dataKey="spend" 
+              nameKey="project" 
+              cx="50%" 
+              cy="50%" 
+              outerRadius={110} 
+              innerRadius={65} 
+              paddingAngle={2}
+            >
+              {data.map((entry, index) => (
+                <Cell key={entry.project} fill={SERIES_COLORS[index % SERIES_COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8 }}
+              formatter={(value: any, _name: any, item: any) => {
+                const spend = Number(value) || 0;
+                const pct = total ? (spend / total) * 100 : 0;
+                return [`${fmtMoney(spend)} (${pct.toFixed(1)}%)`, item?.payload?.project || ""];
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* 右側：文字數據列表 (加入滾動條以防項目過多) */}
+      <div className="flex max-h-full w-full flex-col overflow-y-auto pr-4 md:w-1/2 lg:w-5/12">
+        <div className="space-y-3 py-2">
+          {data.map((item, index) => {
+            const pct = total ? (item.spend / total) * 100 : 0;
+            return (
+              <div key={item.project} className="flex items-center justify-between text-sm hover:bg-slate-800/50 rounded px-2 py-1 transition-colors -mx-2">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: SERIES_COLORS[index % SERIES_COLORS.length] }}
+                  />
+                  <span className="font-medium text-slate-200">{item.project}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="tabular-nums text-slate-300">{fmtMoney(item.spend)}</span>
+                  <span className="w-12 text-right tabular-nums text-slate-500">{pct.toFixed(1)}%</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
