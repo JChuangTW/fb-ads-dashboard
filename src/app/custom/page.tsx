@@ -314,7 +314,6 @@ function SpendShareChart({ data }: { data: { project: string; spend: number }[] 
   const total = data.reduce((sum, item) => sum + item.spend, 0);
   return (
     <div className="flex h-full flex-col gap-6 md:flex-row md:items-center">
-     <div className="flex h-full min-h-[300px] flex-col gap-6 md:flex-row md:items-center">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={data} dataKey="spend" nameKey="project" cx="50%" cy="50%" outerRadius="90%" innerRadius="55%" paddingAngle={2}>
