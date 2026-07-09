@@ -62,6 +62,7 @@ const PROJECTS = [
   "提眉",
   "異體真皮",
   "中下臉拉皮",
+  "26夏日方案",
 ];
 
 const TREND_METRICS: {
