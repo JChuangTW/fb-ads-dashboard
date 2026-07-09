@@ -312,28 +312,53 @@ function SummaryCard({ label, value, compareValue, fmt, dir }: any) {
 
 function SpendShareChart({ data }: { data: { project: string; spend: number }[] }) {
   const total = data.reduce((sum, item) => sum + item.spend, 0);
+
   return (
-    <div className="flex h-full flex-col gap-6 md:flex-row md:items-center">
+    <div className="flex h-[300px] w-full flex-col gap-6 md:flex-row md:items-center">
+      {/* 左邊：圓餅圖 */}
+      <div className="h-full w-full md:w-1/2">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={data} dataKey="spend" nameKey="project" cx="50%" cy="50%" outerRadius="90%" innerRadius="55%" paddingAngle={2}>
+            <Pie
+              data={data}
+              dataKey="spend"
+              nameKey="project"
+              cx="50%"
+              cy="50%"
+              outerRadius="90%"
+              innerRadius="55%"
+              paddingAngle={2}
+            >
               {data.map((entry, index) => (
                 <Cell key={entry.project} fill={SERIES_COLORS[index % SERIES_COLORS.length]} />
               ))}
             </Pie>
-            <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8 }} />
+            <Tooltip
+              contentStyle={{
+                background: "#0f172a",
+                border: "1px solid #334155",
+                borderRadius: 8,
+              }}
+            />
           </PieChart>
         </ResponsiveContainer>
       </div>
+
+      {/* 右邊：說明列表 */}
       <div className="w-full md:w-1/2">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           {data.map((item, index) => (
             <div key={item.project} className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2 truncate">
-                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: SERIES_COLORS[index % SERIES_COLORS.length] }} />
+                <span
+                  className="h-2 w-2 rounded-full shrink-0"
+                  style={{ backgroundColor: SERIES_COLORS[index % SERIES_COLORS.length] }}
+                />
                 <span className="truncate text-slate-300">{item.project}</span>
               </div>
-              <span className="text-slate-500">{(total ? (item.spend / total) * 100 : 0).toFixed(0)}%</span>
+              <span className="text-slate-500">
+                {(total ? (item.spend / total) * 100 : 0).toFixed(0)}%
+              </span>
             </div>
           ))}
         </div>
