@@ -43,6 +43,7 @@ type ProjectKpi = {
   current: ProjectStats;
   compare: ProjectStats;
   deltas: {
+    spend: number | null;
     messages: number | null;
     messageCost: number | null;
     messageStartRate: number | null;
@@ -207,6 +208,7 @@ export default function CustomPage() {
         current,
         compare,
         deltas: {
+          spend: deltaPct(current.spend, compare.spend),
           messages: deltaPct(current.messages, compare.messages),
           messageCost: deltaPct(current.messageCost, compare.messageCost),
           messageStartRate: deltaPct(current.messageStartRate, compare.messageStartRate),
@@ -580,6 +582,7 @@ function ProjectCard({ item }: { item: ProjectKpi }) {
       </div>
 
       <div className="space-y-4">
+        <MetricLine label="總花費" value={fmtMoney(item.current.spend)} compareValue={fmtMoney(item.compare.spend)} delta={item.deltas.spend} dir="up" />
         <MetricLine label="訊息量" value={fmtNum(item.current.messages)} compareValue={fmtNum(item.compare.messages)} delta={item.deltas.messages} dir="up" />
         <MetricLine label="訊息成本" value={fmtMoney(item.current.messageCost)} compareValue={fmtMoney(item.compare.messageCost)} delta={item.deltas.messageCost} dir="down" />
         <MetricLine label="訊息開始率" value={fmtPct(item.current.messageStartRate)} compareValue={fmtPct(item.compare.messageStartRate)} delta={item.deltas.messageStartRate} dir="up" />
