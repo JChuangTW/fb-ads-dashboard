@@ -427,10 +427,11 @@ function matchProject(adName: string) {
   const normalized = adName.toLowerCase();
   const mapping: Record<string, string[]> = {
     "鳳凰電波": ["鳳凰", "flx", "thermage"],
-    "皮秒": ["755", "皮秒雷射", "picosure"],
-    "miraDry": ["MiraDry", "微波", "多汗"],
-    "熊貓針": ["黑眼圈"],
-    "提眉": ["提眼瞼肌", "前額拉提"],
+    "皮秒": ["755", "皮秒雷射", "picosure", "皮秒"],
+    "miraDry": ["Miradry", "微波", "miradry"],
+    "眼袋": ["眼袋"],
+    "熊貓針": ["熊貓針", "黑眼圈"],
+    "提眉": ["提眼瞼肌", "前額拉提", "提眉"],
   };
   for (const [name, keywords] of Object.entries(mapping)) {
     if (keywords.some(k => normalized.includes(k.toLowerCase()))) return name;
