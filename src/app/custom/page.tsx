@@ -165,7 +165,7 @@ export default function CustomPage() {
         const [currentJson, compareJson, leadsRes] = await Promise.all([
           fetchInsights(currentRange),
           fetchInsights(compareRange),
-          fetch("https://script.google.com/macros/s/AKfycbynF3LICkd5OS-zAMs4kLo7-Wq9WdKolqZpKv-MxWrnsf5doyuGyN28pOlFKX9qWguAeQ/exec", { cache: "no-store" }).then(res => res.json())
+          fetchLeads(currentRange),
         ]);
 
         if (cancelled) return;
@@ -174,7 +174,7 @@ export default function CustomPage() {
 
         setCurrentRows(currentJson.data || []);
         setCompareRows(compareJson.data || []);
-        setLeadsData(leadsRes.data || []);
+        setLeadsData(Array.isArray(leadsRes) ? leadsRes : leadsRes.data || []);
       } catch (e: any) {
         if (!cancelled) setError(e?.message || "Unknown error");
       } finally {
@@ -210,14 +210,14 @@ export default function CustomPage() {
   const compareSummary = useMemo(() => buildSummaryStats(compareRows), [compareRows]);
 
   const spendShareData = useMemo(() => {
-    return kpis
-      .filter((item) => item.current.spend > 0)
-      .map((item) => ({
-        project: item.project,
-        spend: item.current.spend,
-      }))
-      .sort((a, b) => b.spend - a.spend);
-  }, [kpis]);
+  return kpis
+    .filter((item) => item && item.current && Number(item.current.spend) > 0)
+    .map((item) => ({
+      project: item.project,
+      spend: Number(item.current.spend) || 0,
+    }))
+    .sort((a, b) => b.spend - a.spend);
+}, [kpis]);
 
   const trendData = useMemo(() => {
     return buildTrendData(currentRows, selectedTrendProjects, trendMetric);
@@ -277,7 +277,7 @@ export default function CustomPage() {
 
         <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
           <h2 className="text-lg font-semibold mb-4 text-slate-100">項目花費佔比</h2>
-          <div className="h-auto md:h-80">
+          <div className="h-80 min-h-[320px] min-w-0">
             <SpendShareChart data={spendShareData} />
           </div>
         </section>
@@ -310,32 +310,83 @@ function SummaryCard({ label, value, compareValue, fmt, dir }: any) {
   );
 }
 
-function SpendShareChart({ data }: { data: { project: string; spend: number }[] }) {
-  const total = data.reduce((sum, item) => sum + item.spend, 0);
+function SpendShareChart({
+  data,
+}: {
+  data: { project: string; spend: number }[];
+}) {
+  const safeData = (data || []).filter(
+    (item) => item && item.project && Number(item.spend) > 0
+  );
+
+  const total = safeData.reduce((sum, item) => sum + Number(item.spend || 0), 0);
+
+  if (!safeData.length || total <= 0) {
+    return (
+      <div className="flex h-full min-h-[320px] items-center justify-center rounded-xl border border-dashed border-slate-800 text-sm text-slate-500">
+        目前區間沒有可顯示的花費資料
+      </div>
+    );
+  }
 
   return (
-    <div className="flex w-full flex-col md:flex-row md:items-center" style={{ height: '300px' }}>
-      <div className="h-full w-full md:w-1/2">
-        <ResponsiveContainer width="100%" height="100%">
+    <div className="flex h-full min-h-[320px] w-full min-w-0 flex-col md:flex-row md:items-center">
+      <div className="h-full min-h-[320px] min-w-0 w-full md:w-1/2">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={300}>
           <PieChart>
-            <Pie data={data} dataKey="spend" nameKey="project" cx="50%" cy="50%" outerRadius="90%" innerRadius="55%" paddingAngle={2}>
-              {data.map((entry, index) => (
-                <Cell key={entry.project} fill={SERIES_COLORS[index % SERIES_COLORS.length]} />
+            <Pie
+              data={safeData}
+              dataKey="spend"
+              nameKey="project"
+              cx="50%"
+              cy="50%"
+              outerRadius="90%"
+              innerRadius="55%"
+              paddingAngle={2}
+            >
+              {safeData.map((entry, index) => (
+                <Cell
+                  key={entry.project}
+                  fill={SERIES_COLORS[index % SERIES_COLORS.length]}
+                />
               ))}
             </Pie>
-            <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8 }} />
+
+            <Tooltip
+              contentStyle={{
+                background: "#0f172a",
+                border: "1px solid #334155",
+                borderRadius: 8,
+              }}
+              formatter={(value: any) => fmtMoney(Number(value) || 0)}
+            />
           </PieChart>
         </ResponsiveContainer>
       </div>
+
       <div className="w-full md:w-1/2">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          {data.map((item, index) => (
-            <div key={item.project} className="flex items-center justify-between text-xs">
+          {safeData.map((item, index) => (
+            <div
+              key={item.project}
+              className="flex items-center justify-between text-xs"
+            >
               <div className="flex items-center gap-2 truncate">
-                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: SERIES_COLORS[index % SERIES_COLORS.length] }} />
-                <span className="truncate text-slate-300">{item.project}</span>
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor:
+                      SERIES_COLORS[index % SERIES_COLORS.length],
+                  }}
+                />
+                <span className="truncate text-slate-300">
+                  {item.project}
+                </span>
               </div>
-              <span className="text-slate-500">{(total ? (item.spend / total) * 100 : 0).toFixed(0)}%</span>
+
+              <span className="text-slate-500">
+                {((item.spend / total) * 100).toFixed(0)}%
+              </span>
             </div>
           ))}
         </div>
@@ -448,6 +499,23 @@ function deltaPct(c: number, p: number) { return p ? ((c - p) / p) * 100 : null;
 async function fetchInsights(range: any) {
   const sp = new URLSearchParams({ since: range.since, until: range.until, level: "ad" });
   return fetch(`/api/insights?${sp.toString()}`).then(r => r.json());
+}
+
+async function fetchLeads(range: { since: string; until: string }) {
+  const sp = new URLSearchParams({
+    since: range.since,
+    until: range.until,
+  });
+
+  const res = await fetch(`/api/leads?${sp.toString()}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error("Leads API request failed");
+  }
+
+  return res.json();
 }
 
 // 趨勢圖邏輯保持不變...
