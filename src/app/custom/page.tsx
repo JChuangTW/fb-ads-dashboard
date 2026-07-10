@@ -306,26 +306,9 @@ function SummaryCard({ label, value, compareValue, fmt, dir }: any) {
   );
 }
 
-function SpendShareChart({
-  data,
-}: {
-  data: { project: string; spend: number }[];
-}) {
-  const safeData = (data || []).filter(
-    (item) => item && item.project && Number(item.spend) > 0
-  );
-
-  const total = safeData.reduce(
-    (sum, item) => sum + (Number(item.spend) || 0),
-    0
-  );
-
-  if (!safeData.length || total <= 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-slate-800 py-10 text-center text-sm text-slate-500">
-        目前區間沒有可顯示的花費資料
-      </div>
-    );
+function SpendShareChart({ data }: { data: { project: string; spend: number }[] }) {
+  if (!data || data.length === 0) {
+    return <div className="h-[300px] flex items-center justify-center text-slate-500">暫無花費資料</div>;
   }
 
   return (
