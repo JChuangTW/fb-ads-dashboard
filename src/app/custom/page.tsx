@@ -306,15 +306,36 @@ function SummaryCard({ label, value, compareValue, fmt, dir }: any) {
   );
 }
 
-function SpendShareChart({ data }: { data: { project: string; spend: number }[] }) {
-  if (!data || data.length === 0) {
-    return <div className="h-[300px] flex items-center justify-center text-slate-500">暫無花費資料</div>;
+function SpendShareChart({
+  data,
+}: {
+  data: { project: string; spend: number }[];
+}) {
+  const safeData = (data || [])
+    .filter((item) => item && item.project)
+    .map((item) => ({
+      project: item.project,
+      spend: Number(item?.spend || 0),
+    }))
+    .filter((item) => item.spend > 0);
+
+  const total = safeData.reduce(
+    (sum, item) => sum + Number(item?.spend || 0),
+    0
+  );
+
+  if (!safeData.length || total <= 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-800 py-10 text-center text-sm text-slate-500">
+        目前區間沒有可顯示的花費資料
+      </div>
+    );
   }
 
   return (
     <div className="space-y-3">
       {safeData.map((item, index) => {
-        const spend = Number(item.spend) || 0;
+        const spend = Number(item?.spend || 0);
         const percent = total ? (spend / total) * 100 : 0;
 
         return (
@@ -333,9 +354,7 @@ function SpendShareChart({ data }: { data: { project: string; spend: number }[] 
 
               <div className="flex items-center gap-3 font-mono text-xs">
                 <span className="text-slate-400">{fmtMoney(spend)}</span>
-                <span className="text-slate-500">
-                  {percent.toFixed(1)}%
-                </span>
+                <span className="text-slate-500">{percent.toFixed(1)}%</span>
               </div>
             </div>
 
@@ -355,6 +374,7 @@ function SpendShareChart({ data }: { data: { project: string; spend: number }[] 
     </div>
   );
 }
+
 function ProjectCard({ item }: { item: ProjectKpi }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950 p-5 hover:border-slate-700 transition-colors">
