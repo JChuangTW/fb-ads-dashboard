@@ -5,15 +5,13 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
-  Cell,
   Legend,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+
 import { 
   fmtMoney, 
   fmtNum, 
@@ -210,7 +208,7 @@ export default function CustomPage() {
   const compareSummary = useMemo(() => buildSummaryStats(compareRows), [compareRows]);
 
   const spendShareData = useMemo(() => {
-  return kpis
+  return (kpis || [])
     .filter((item) => item && item.current && Number(item.current.spend) > 0)
     .map((item) => ({
       project: item.project,
@@ -276,10 +274,8 @@ export default function CustomPage() {
         </section>
 
         <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-          <h2 className="text-lg font-semibold mb-4 text-slate-100">項目花費佔比</h2>
-          <div className="h-80 min-h-[320px] min-w-0">
-            <SpendShareChart data={spendShareData} />
-          </div>
+          <h2 className="mb-4 text-lg font-semibold text-slate-100">項目花費佔比</h2>
+          <SpendShareChart data={spendShareData} />
         </section>
 
         <section className="mb-6">
@@ -319,82 +315,63 @@ function SpendShareChart({
     (item) => item && item.project && Number(item.spend) > 0
   );
 
-  const total = safeData.reduce((sum, item) => sum + Number(item.spend || 0), 0);
+  const total = safeData.reduce(
+    (sum, item) => sum + (Number(item.spend) || 0),
+    0
+  );
 
   if (!safeData.length || total <= 0) {
     return (
-      <div className="flex h-full min-h-[320px] items-center justify-center rounded-xl border border-dashed border-slate-800 text-sm text-slate-500">
+      <div className="rounded-xl border border-dashed border-slate-800 py-10 text-center text-sm text-slate-500">
         目前區間沒有可顯示的花費資料
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-[320px] w-full min-w-0 flex-col md:flex-row md:items-center">
-      <div className="h-full min-h-[320px] min-w-0 w-full md:w-1/2">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={300}>
-          <PieChart>
-            <Pie
-              data={safeData}
-              dataKey="spend"
-              nameKey="project"
-              cx="50%"
-              cy="50%"
-              outerRadius="90%"
-              innerRadius="55%"
-              paddingAngle={2}
-            >
-              {safeData.map((entry, index) => (
-                <Cell
-                  key={entry.project}
-                  fill={SERIES_COLORS[index % SERIES_COLORS.length]}
-                />
-              ))}
-            </Pie>
+    <div className="space-y-3">
+      {safeData.map((item, index) => {
+        const spend = Number(item.spend) || 0;
+        const percent = total ? (spend / total) * 100 : 0;
 
-            <Tooltip
-              contentStyle={{
-                background: "#0f172a",
-                border: "1px solid #334155",
-                borderRadius: 8,
-              }}
-              formatter={(value: any) => fmtMoney(Number(value) || 0)}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="w-full md:w-1/2">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          {safeData.map((item, index) => (
-            <div
-              key={item.project}
-              className="flex items-center justify-between text-xs"
-            >
-              <div className="flex items-center gap-2 truncate">
+        return (
+          <div key={item.project}>
+            <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+              <div className="flex items-center gap-2">
                 <span
-                  className="h-2 w-2 shrink-0 rounded-full"
+                  className="h-2.5 w-2.5 rounded-full"
                   style={{
                     backgroundColor:
                       SERIES_COLORS[index % SERIES_COLORS.length],
                   }}
                 />
-                <span className="truncate text-slate-300">
-                  {item.project}
-                </span>
+                <span className="text-slate-200">{item.project}</span>
               </div>
 
-              <span className="text-slate-500">
-                {((item.spend / total) * 100).toFixed(0)}%
-              </span>
+              <div className="flex items-center gap-3 font-mono text-xs">
+                <span className="text-slate-400">{fmtMoney(spend)}</span>
+                <span className="text-slate-500">
+                  {percent.toFixed(1)}%
+                </span>
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
+
+            <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${percent}%`,
+                  backgroundColor:
+                    SERIES_COLORS[index % SERIES_COLORS.length],
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
-
 function ProjectCard({ item }: { item: ProjectKpi }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950 p-5 hover:border-slate-700 transition-colors">
