@@ -422,7 +422,9 @@ function buildProjectStats(rows: Row[], leads: any[] = []): Map<string, ProjectS
   rows.forEach(row => {
     const p = matchProject(row.ad_name || "");
     if (p) {
-      const item = map.get(p)!;
+      const item = map.get(p);
+      if (!item) return;
+      
       item.spend += num(row.spend);
       item.reach += num(row.reach);
       item.messages += num(row.started7d ?? row.messagingConversationsStarted);
@@ -430,10 +432,10 @@ function buildProjectStats(rows: Row[], leads: any[] = []): Map<string, ProjectS
   });
 
   leads.forEach(lead => {
-    if (map.has(lead.project)) {
-      const item = map.get(lead.project)!;
-      item.actualLeads += num(lead.leads);
-    }
+    const item = map.get(lead.project);
+    if (!item) return;
+    
+    item.actualLeads += num(lead.leads);
   });
 
   map.forEach(item => {
@@ -506,9 +508,14 @@ function buildTrendData(rows: Row[], projects: string[], metricKey: TrendMetricK
     if (!date || !p || !projects.includes(p)) return;
     if (!byDate.has(date)) byDate.set(date, new Map());
     const dateMap = byDate.get(date)!;
+    if (!PROJECTS.includes(p)) return;
+
     if (!dateMap.has(p)) dateMap.set(p, emptyProjectStats(p));
-    const item = dateMap.get(p)!;
+    const item = dateMap.get(p);
+    if (!item) return;
+    
     item.spend += num(row.spend);
+    item.reach += num(row.reach);
     item.messages += num(row.started7d ?? row.messagingConversationsStarted);
   });
   return [...byDate.keys()].sort().map(date => {
