@@ -683,8 +683,6 @@ function matchProject(
 
     miraDry: [
       "miradry",
-      "微波止汗",
-      "微波除汗",
     ],
 
     青萃光: [
