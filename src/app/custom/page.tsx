@@ -119,8 +119,13 @@ export default function CustomPage() {
     }
     load();
     return () => { cancelled = true; };
-  }, [currentRange, compareRange]);
-
+    
+  }, [
+    currentRange.since, 
+    currentRange.until, 
+    compareRange.since, 
+    compareRange.until
+  ]);
   const currentStats = useMemo(() => buildProjectStats(currentRows), [currentRows]);
   const compareStats = useMemo(() => buildProjectStats(compareRows), [compareRows]);
 
